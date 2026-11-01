@@ -1,11 +1,11 @@
-# Libretto — Technical Service Information
+# Workbook — Technical Service Information
 
 Internal workshop reference system for Porsche, Ferrari, and Audi vehicles. Aggregates factory service documentation into a searchable web interface.
 
 ## Structure
 
 ```
-libretto/
+workbook/
 ├── api/          # Rust/Axum API server + data importers
 └── web/          # Next.js 14 frontend
 ```
@@ -44,7 +44,7 @@ mise run db:migrate   # Run pending migrations only
 
 ```bash
 # 1. Set PCSS cookie in api/config.toml (only needed for Porsche reimport; cache hits skip it)
-#    Or via env: export LIBRETTO_IMPORTER__COOKIE="..."
+#    Or via env: export WORKBOOK_IMPORTER__COOKIE="..."
 
 # 2. Create web/.env.local (see environment variables below)
 
@@ -58,13 +58,13 @@ The web frontend requires OIDC (Pocket ID). Set `NEXT_PUBLIC_AUTH_BYPASS=true` i
 
 ### Environment variables
 
-**API** — set via `api/config.toml` or `LIBRETTO_` prefixed env vars:
+**API** — set via `api/config.toml` or `WORKBOOK_` prefixed env vars:
 
 | Variable | Description |
 |----------|-------------|
-| `LIBRETTO_IMPORTER__COOKIE` | PCSS session cookie (for Porsche vehicle reimport) |
-| `LIBRETTO_API__HOST` | Public API base URL (used in cross-document links) |
-| `LIBRETTO_DATABASE_URL` | DB connection string (default: `sqlite://content.sqlite3`; set to `postgres://...` for k8s) |
+| `WORKBOOK_IMPORTER__COOKIE` | PCSS session cookie (for Porsche vehicle reimport) |
+| `WORKBOOK_API__HOST` | Public API base URL (used in cross-document links) |
+| `WORKBOOK_DATABASE_URL` | DB connection string (default: `sqlite://content.sqlite3`; set to `postgres://...` for k8s) |
 
 **Web** — set in `web/.env.local`:
 
@@ -98,6 +98,6 @@ make release        # bump patch version, build + push both images
 make build          # build without pushing
 ```
 
-Images: `registry.bigkraig.com/libretto-api`, `registry.bigkraig.com/libretto-web`
+Images: `registry.bigkraig.com/workbook-api`, `registry.bigkraig.com/workbook-web`
 
 Tagged with semver (`0.1.0`) and git short hash (`abc1234`).

@@ -7,7 +7,7 @@ Source: `Workshop Manual AUDI R8 2016-2020/` — 22 PDFs, ~190 MB.
 Each PDF carries a clean PDF bookmark tree. The top level is the standard
 VW/Audi **repair group** (`46 – Brakes - mechanism`); the level below it is the
 **section** (`Front brakes`, `Rear brakes`). We split every PDF into
-section-level documents and rebuild the tree in Libretto so each section becomes its
+section-level documents and rebuild the tree in Workbook so each section becomes its
 own searchable, viewable document — exactly like the existing Porsche/Ferrari
 data.
 

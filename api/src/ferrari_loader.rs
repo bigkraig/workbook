@@ -38,7 +38,7 @@ struct PreparedFerrari {
 
 
 const FERRARI_LINK_PREFIX: &'static str = "https://modiscs.ferrari.it/techdoc_techinfo/";
-const ROOT: &'static str = "https://libretto.bigkraig.com";
+const ROOT: &'static str = "https://workbook.birdstreetexotics.com";
 // const ROOT: &'static str = "http://localhost:3000";
 
 #[derive(clap::Args)]

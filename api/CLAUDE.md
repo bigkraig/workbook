@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Libretto is a Rust application that serves as an API gateway to the Porsche PCSS (Porsche Component Structure System). It has two modes:
+Workbook is a Rust application that serves as an API gateway to the Porsche PCSS (Porsche Component Structure System). It has two modes:
 1. **Vehicle Importer**: CLI tool that fetches and caches vehicle data from PCSS API
 2. **REST API Server**: Serves the cached data via JSON REST endpoints
 
@@ -19,15 +19,15 @@ cargo run -- migrate           # Run database migrations manually
 ## Run Commands
 
 ```bash
-./target/release/libretto api                                    # Start API server (default: 0.0.0.0:3030)
-./target/release/libretto vehicle_importer [-m MODEL] [-y YEAR]  # Import vehicle data from PCSS
+./target/release/workbook api                                    # Start API server (default: 0.0.0.0:3030)
+./target/release/workbook vehicle_importer [-m MODEL] [-y YEAR]  # Import vehicle data from PCSS
 ```
 
-Migrations run automatically at startup. Set `LIBRETTO_DATABASE_URL` to choose the backend:
+Migrations run automatically at startup. Set `WORKBOOK_DATABASE_URL` to choose the backend:
 
 ```bash
-export LIBRETTO_DATABASE_URL="sqlite://content.sqlite3"          # default
-export LIBRETTO_DATABASE_URL="postgres://user:pass@host/libretto"     # k8s / production
+export WORKBOOK_DATABASE_URL="sqlite://content.sqlite3"          # default
+export WORKBOOK_DATABASE_URL="postgres://user:pass@host/workbook"     # k8s / production
 ```
 
 ## Docker
@@ -64,9 +64,9 @@ PCSS API (Porsche) → VehicleImporter → cache/ → ContentStore → content D
 
 ### Database
 
-Single pool (`AnyPool`) selected at runtime by `LIBRETTO_DATABASE_URL`:
+Single pool (`AnyPool`) selected at runtime by `WORKBOOK_DATABASE_URL`:
 - **SQLite**: `sqlite://content.sqlite3` (default, local dev)
-- **Postgres**: `postgres://user:pass@host/libretto` (k8s / production)
+- **Postgres**: `postgres://user:pass@host/workbook` (k8s / production)
 
 Migrations live in `migrations/sqlite/` and `migrations/postgres/` — selected automatically at startup.
 
@@ -91,7 +91,7 @@ bind_address = "0.0.0.0:3030"
 host = "http://localhost:3030"
 ```
 
-Environment variables use `LIBRETTO_` prefix to override config settings.
+Environment variables use `WORKBOOK_` prefix to override config settings.
 
 ## API Endpoints
 

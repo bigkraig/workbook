@@ -48,7 +48,7 @@ impl Settings {
     pub fn new() -> anyhow::Result<Self, ConfigError> {
         let s = Config::builder()
             .add_source(config::File::with_name("config"))
-            .add_source(config::Environment::with_prefix("LIBRETTO"))
+            .add_source(config::Environment::with_prefix("WORKBOOK"))
             .build()?;
         s.try_deserialize()
     }

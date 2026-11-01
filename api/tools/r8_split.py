@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Split the Audi R8 (2016-2020) workshop manual PDFs into section-level documents
-and rebuild cross-reference links to point at the right Libretto document.
+and rebuild cross-reference links to point at the right Workbook document.
 
 Tree (VW/Audi taxonomy):
     main group (0-9)
@@ -44,7 +44,7 @@ from pypdf.generic import (
 # (we rebuild the cross-reference links ourselves afterward).
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 
-ROOT = "https://libretto.bigkraig.com"
+ROOT = "https://workbook.birdstreetexotics.com"
 YEAR = 2018
 MODEL = "R8"
 VEHICLE_NAME = "R8 2016-2020"

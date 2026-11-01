@@ -6,7 +6,7 @@ import Script from "next/script";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "Libretto",
+  title: "Workbook",
   description: "Technical service reference for exotic vehicles",
 };
 

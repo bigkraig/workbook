@@ -6,13 +6,13 @@ use clap::Parser;
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use libretto::api::{Api, ApiArgs};
-use libretto::content_store::ContentStore;
-use libretto::ferrari_loader::{FerrariLoader, LoadFerrariArgs};
-use libretto::audi_loader::{self, LoadAudiArgs};
-use libretto::pdf_text::{self, ExtractPdfTextArgs};
-use libretto::settings::Settings;
-use libretto::vehicle_importer::{VehicleImporter, VehicleImporterArgs};
+use workbook::api::{Api, ApiArgs};
+use workbook::content_store::ContentStore;
+use workbook::ferrari_loader::{FerrariLoader, LoadFerrariArgs};
+use workbook::audi_loader::{self, LoadAudiArgs};
+use workbook::pdf_text::{self, ExtractPdfTextArgs};
+use workbook::settings::Settings;
+use workbook::vehicle_importer::{VehicleImporter, VehicleImporterArgs};
 
 #[derive(clap::Args)]
 #[command(version, about, long_about = None)]
@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
         }
         Cli::Api(args) => {
             let api = Api::new(&settings, &args);
-            libretto::api::serve(&settings.api.bind_address, api).await?;
+            workbook::api::serve(&settings.api.bind_address, api).await?;
             Ok(())
         }
         Cli::LoadFerrari(args) => {

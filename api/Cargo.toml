@@ -5,7 +5,7 @@ members = [
 default-members = ["."]
 
 [package]
-name = "libretto"
+name = "workbook"
 version = "0.1.0"
 edition = "2021"
 
@@ -55,7 +55,7 @@ pdf-extract-old = { package = "pdf-extract", version = "0.7" }
 libc = "0.2"
 
 [[bin]]
-name = "libretto"
+name = "workbook"
 
 [lib]
 doc = false

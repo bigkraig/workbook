@@ -8,7 +8,7 @@ import {GetAncestors, GetVehicle, Vehicle} from "@/lib/api";
 import {HREF} from "@/lib";
 import Image from "next/image";
 import {MarqueBadge} from "./MarqueBadge";
-import {LibrettoMark} from "@/app/ui/LibrettoMark";
+import {WorkbookMark} from "@/app/ui/WorkbookMark";
 
 const key = "navigator_position"
 const navigatorDiv = "navigator"
@@ -17,9 +17,9 @@ function RootHeader() {
   return (
     <Link href="/" className={clsx("block bg-ink px-6 py-6 md:py-8 text-center border-b border-white/10")}>
       <div className={clsx("flex justify-center text-white")}>
-        <LibrettoMark className={clsx("h-9 w-9 md:h-11 md:w-11")}/>
+        <WorkbookMark className={clsx("h-9 w-9 md:h-11 md:w-11")}/>
       </div>
-      <p className={clsx("mt-2.5 font-mono text-base md:text-lg uppercase tracking-[0.32em] text-white")}>Libretto</p>
+      <p className={clsx("mt-2.5 font-mono text-base md:text-lg uppercase tracking-[0.32em] text-white")}>Workbook</p>
       <p className={clsx("mt-1 text-[11px] text-white/45")}>Service reference</p>
     </Link>
   )

@@ -1,15 +1,15 @@
 REGISTRY       ?= registry.bigkraig.com
-IMAGE_NAME     := $(REGISTRY)/libretto-api
+IMAGE_NAME     := $(REGISTRY)/workbook-api
 VERSION        := $(shell cat VERSION)
 GIT_HASH       := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
-CONTAINER_NAME ?= libretto-api
+CONTAINER_NAME ?= workbook-api
 NETWORK        ?= linuxserver
-DATA_DIR       ?= /mnt/appdata/libretto
+DATA_DIR       ?= /mnt/appdata/workbook
 
 .PHONY: help build push release bump-patch run deploy clean version rebuild migrate load load-porsche load-ferrari load-audi extract-text
 
 help:
-	@echo "libretto-api targets:"
+	@echo "workbook-api targets:"
 	@echo "  make build         build $(IMAGE_NAME):$(VERSION) and $(IMAGE_NAME):$(GIT_HASH)"
 	@echo "  make push          push both tags to registry"
 	@echo "  make release       bump-patch + build + push"
@@ -24,10 +24,10 @@ help:
 	@echo "  make load-ferrari  run load-ferrari"
 	@echo "  make load-audi     run load-audi"
 	@echo ""
-	@echo "Set LIBRETTO_DATABASE_URL to target a specific database."
+	@echo "Set WORKBOOK_DATABASE_URL to target a specific database."
 
 # Rebuild the entire content database from the committed sources (cache/ + source_files/)
-# against LIBRETTO_DATABASE_URL: run migrations, then all three loaders. Idempotent — the
+# against WORKBOOK_DATABASE_URL: run migrations, then all three loaders. Idempotent — the
 # loaders upsert — so re-running refreshes in place; to rebuild from scratch, drop the target
 # database/schema first. (load-audi additionally needs python3 + pypdf for the R8 PDF split.)
 rebuild: migrate load

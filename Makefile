@@ -1,10 +1,10 @@
-NEXT_PUBLIC_API_HOST       ?= http://libretto-api:3030
-NEXT_PUBLIC_API_IMAGE_HOST ?= http://libretto-api:3030
+NEXT_PUBLIC_API_HOST       ?= http://workbook-api:3030
+NEXT_PUBLIC_API_IMAGE_HOST ?= http://workbook-api:3030
 
 .PHONY: help build push release bump-patch version
 
 help:
-	@echo "Libretto build targets (runs both api and web):"
+	@echo "Workbook build targets (runs both api and web):"
 	@echo "  make build       build both images"
 	@echo "  make push        push both images"
 	@echo "  make release     bump-patch + build + push for both"

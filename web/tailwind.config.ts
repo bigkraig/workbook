@@ -22,7 +22,7 @@ const config: Config = {
     },
     extend: {
       colors: {
-        // Libretto identity — marque-neutral, instrument-grade.
+        // Workbook identity — marque-neutral, instrument-grade.
         'ink': '#16181D',        // sidebar / headers
         'ink-2': '#22252C',      // raised ink surface
         'paper': '#F3F2ED',      // work area (warm stone; white panels sit on it)

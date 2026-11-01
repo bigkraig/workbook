@@ -1,7 +1,7 @@
 import localFont from "next/font/local";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 
-// Libretto UI type system. Plex Sans carries the interface (engineering-heritage
+// Workbook UI type system. Plex Sans carries the interface (engineering-heritage
 // grotesque); Plex Mono stamps the technical codes/indices and the wordmark.
 export const PlexSans = IBM_Plex_Sans({
   subsets: ["latin"],

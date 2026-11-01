@@ -1,17 +1,17 @@
 REGISTRY              ?= registry.bigkraig.com
-IMAGE_NAME            := $(REGISTRY)/libretto-web
+IMAGE_NAME            := $(REGISTRY)/workbook-web
 VERSION               := $(shell cat VERSION)
 GIT_HASH              := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
-CONTAINER_NAME        ?= libretto
+CONTAINER_NAME        ?= workbook
 NETWORK               ?= linuxserver
-NEXT_PUBLIC_API_HOST       ?= http://libretto-api:3030
-NEXT_PUBLIC_API_IMAGE_HOST ?= http://libretto-api:3030
+NEXT_PUBLIC_API_HOST       ?= http://workbook-api:3030
+NEXT_PUBLIC_API_IMAGE_HOST ?= http://workbook-api:3030
 NEXT_PUBLIC_AUTH_BYPASS    ?= false
 
 .PHONY: help build push release bump-patch run deploy clean version
 
 help:
-	@echo "libretto-web targets:"
+	@echo "workbook-web targets:"
 	@echo "  make build                  build $(IMAGE_NAME):$(VERSION) and $(IMAGE_NAME):$(GIT_HASH)"
 	@echo "  make push                   push both tags to registry"
 	@echo "  make release                bump-patch + build + push"

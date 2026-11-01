@@ -11,13 +11,13 @@ const nextConfig = {
         remotePatterns: [
             {
                 protocol: 'https',
-                hostname: 'libretto.bigkraig.com',
+                hostname: 'workbook.birdstreetexotics.com',
                 port: '',
                 pathname: '/**',
             },
             {
                 protocol: 'http',
-                hostname: 'libretto-api',
+                hostname: 'workbook-api',
                 port: '3030',
                 pathname: '/v1/**',
             },

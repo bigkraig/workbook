@@ -1,8 +1,8 @@
 
-tech values table on https://libretto.bigkraig.com/documents/2016/981810/57124989#PIWIS96691e71-0d64-48c8-ab40-712f72296029 is fucked
+tech values table on https://workbook.birdstreetexotics.com/documents/2016/981810/57124989#PIWIS96691e71-0d64-48c8-ab40-712f72296029 is fucked
 
 
-spacing on general information tool page could be better https://libretto.bigkraig.com/tools/2016/981810/OTgzNi8x
+spacing on general information tool page could be better https://workbook.birdstreetexotics.com/tools/2016/981810/OTgzNi8x
 
 
 

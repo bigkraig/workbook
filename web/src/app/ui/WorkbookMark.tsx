@@ -1,8 +1,8 @@
 import clsx from "clsx";
 
-// Libretto mark — a bound service booklet (the literal "libretto") with a brass
+// Workbook mark — a bound service workbook with a brass
 // bookmark ribbon. Booklet inherits currentColor; ribbon is the fixed brass accent.
-export function LibrettoMark({className}: { className?: string }) {
+export function WorkbookMark({className}: { className?: string }) {
   return (
     <svg viewBox="0 0 40 40" className={clsx(className)} fill="none" aria-hidden="true">
       {/* booklet body */}
