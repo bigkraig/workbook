@@ -23,7 +23,7 @@ cargo run -- migrate           # Run database migrations manually
 ./target/release/workbook vehicle_importer [-m MODEL] [-y YEAR]  # Import vehicle data from PCSS
 ```
 
-Migrations run automatically at startup. Set `WORKBOOK_DATABASE_URL` to choose the backend:
+Migrations run at startup for the loaders and `migrate`, but NOT for `api` (it must boot with the DB down); in k8s a `migrate` init container applies them before each API pod starts. Set `WORKBOOK_DATABASE_URL` to choose the backend:
 
 ```bash
 export WORKBOOK_DATABASE_URL="sqlite://content.sqlite3"          # default
