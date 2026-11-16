@@ -507,7 +507,8 @@ impl ContentStore {
     }
 
     pub fn get_tool_distributors(&self, tool_id: i32) -> Result<Vec<ToolDistributor>> {
-        let q = self.q("SELECT td.id, td.name, td.part_number, td.distributor_code, td.city, td.zip, \
+        // part_number lives on the link: it's the distributor's number for *this* tool.
+        let q = self.q("SELECT td.id, td.name, tdl.part_number, td.distributor_code, td.city, td.zip, \
                  td.street, td.phone, td.fax, td.email, td.web, td.creation_date, td.modification_date, td.key \
                  FROM tool_distributors td \
                  JOIN tool_distributors_links tdl ON tdl.tool_distributor_id = td.id \
@@ -716,12 +717,13 @@ impl ContentStore {
 
         for td in &tool.tool_distributors {
             let td_id = self.upsert_tool_distributor(td)?;
-            let q = self.q("INSERT INTO tool_distributors_links (tool_id, tool_distributor_id) VALUES (?, ?) \
-                     ON CONFLICT(tool_id, tool_distributor_id) DO NOTHING");
+            let q = self.q("INSERT INTO tool_distributors_links (tool_id, tool_distributor_id, part_number) VALUES (?, ?, ?) \
+                     ON CONFLICT(tool_id, tool_distributor_id) DO UPDATE SET part_number = excluded.part_number");
             block(
                 sqlx::query(AssertSqlSafe(q.as_str()))
                 .bind(tool_id)
                 .bind(td_id)
+                .bind(&td.part_number)
                 .execute(&self.pool)
             )?;
         }
@@ -740,12 +742,15 @@ impl ContentStore {
         Ok(tool_id)
     }
 
+    /// One row per distributor (keyed by name). The per-tool part number is NOT stored here —
+    /// tools are imported in parallel, so a shared column would end up with whichever tool
+    /// wrote last. It goes on the tool_distributors_links row instead (see upsert_tool).
     pub fn upsert_tool_distributor(&self, td: &pcss::api_types::ToolDistributor) -> Result<i32> {
         let q = self.q("INSERT INTO tool_distributors \
-                 (name, part_number, distributor_code, city, zip, street, phone, fax, email, web, creation_date, modification_date, key) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
+                 (name, distributor_code, city, zip, street, phone, fax, email, web, creation_date, modification_date, key) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) \
                  ON CONFLICT(name) DO UPDATE SET \
-                   part_number = excluded.part_number, distributor_code = excluded.distributor_code, \
+                   distributor_code = excluded.distributor_code, \
                    city = excluded.city, zip = excluded.zip, street = excluded.street, \
                    phone = excluded.phone, fax = excluded.fax, email = excluded.email, \
                    web = excluded.web, creation_date = excluded.creation_date, \
@@ -754,7 +759,6 @@ impl ContentStore {
         let row: (i32,) = block(
             sqlx::query_as::<_, (i32,)>(AssertSqlSafe(q.as_str()))
             .bind(&td.name)
-            .bind(&td.part_number)
             .bind(&td.distributor_code)
             .bind(&td.city)
             .bind(&td.zip)
