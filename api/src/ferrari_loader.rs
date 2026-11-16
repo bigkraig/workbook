@@ -417,7 +417,7 @@ impl FerrariLoader {
                     }
 
                     let mut stream_clone = stream.clone();
-                    stream_clone.decompress();
+                    let _ = stream_clone.decompress(); // undecodable streams stay compressed and just won't match
                     let content = String::from_utf8_lossy(&stream_clone.content).to_string();
 
                     // Check if this stream contains the Ferrari header
@@ -433,7 +433,7 @@ impl FerrariLoader {
         for id in objects_to_modify {
             if let Some(Object::Stream(stream)) = doc.objects.get_mut(&id) {
                 // Decompress the stream
-                stream.decompress();
+                let _ = stream.decompress();
                 let content = String::from_utf8_lossy(&stream.content).to_string();
 
                 // Remove header BT...ET blocks
@@ -459,7 +459,7 @@ impl FerrariLoader {
                         }
                     }
                     let mut stream_clone = stream.clone();
-                    stream_clone.decompress();
+                    let _ = stream_clone.decompress();
                     let content = String::from_utf8_lossy(&stream_clone.content).to_string();
                     if content.to_lowercase().contains(ferrari_hex_lower) {
                         return Some(*id);

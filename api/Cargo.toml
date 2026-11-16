@@ -9,6 +9,12 @@ name = "workbook"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# SQLite is the local-dev backend (default database_url). The production image builds with
+# --no-default-features: it only talks to Postgres, so the bundled C SQLite stays out of it.
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+
 [dependencies]
 # mimalloc returns freed memory to the OS far more aggressively than glibc malloc, whose
 # per-thread arenas otherwise retain the bulk-loader's transient image churn and bloat RSS
@@ -17,7 +23,7 @@ mimalloc = "0.1"
 # Concurrent set shared across the parallel fetch producers to dedup media/image reads
 # across sibling nodes of a vehicle (they reference the same illustrations repeatedly).
 dashmap = "6"
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "postgres", "any", "migrate"] }
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "any", "migrate"] }
 clap = { version = "4.5.9", features = ["derive"] }
 config = { version = "0.14.0", features = ["toml"] }
 anyhow = "1.0.86"
@@ -34,7 +40,7 @@ tokio = { version = "1.38.1", features = ["full"] }
 tower = "0.4.13"
 tower-http = { version = "0.5.2", features = ["compression-full", "cors"] }
 mime_guess = "2.0.5"
-quick-xml = { version = "0.36.1", features = ["serialize"] }
+quick-xml = { version = "0.42", features = ["serialize"] }
 regex = "1.10.5"
 base64 = "0.22.1"
 pcss = { path = "crates/pcss" }
@@ -49,8 +55,8 @@ tracing = "0.1.40"
 uuid = { version = "1.10.0", features = ["v5"] }
 rayon = "1.10"
 futures = "0.3"
-lopdf = "0.31"
-pdf-extract = "0.10"
+lopdf = "0.47"
+pdf-extract = "0.12"
 pdf-extract-old = { package = "pdf-extract", version = "0.7" }
 libc = "0.2"
 

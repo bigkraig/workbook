@@ -271,16 +271,16 @@ fn patch_illustration(illustration: String) -> Result<String> {
             Ok(Event::Eof) => break, // exits the loop when reaching end of file
 
             // Delete the width/height from the svg
-            Ok(Event::Start(e)) if e.name().as_ref() == b"svg" => {
+            Ok(Event::Start(e)) if e.name().as_ref() == "svg" => {
                 let attributes = e.attributes()
                     .map(|attr| attr.unwrap())
-                    .filter(|attr| { attr.key != QName(b"width") && attr.key != QName(b"height") }).collect::<Vec<Attribute>>();
+                    .filter(|attr| { attr.key != QName("width") && attr.key != QName("height") }).collect::<Vec<Attribute>>();
                 let elem = BytesStart::new("svg").with_attributes(attributes);
                 assert!(writer.write_event(Event::Start(elem)).is_ok())
             }
 
             // Style patches
-            Ok(Event::Start(e)) if e.name().as_ref() == b"style" => {
+            Ok(Event::Start(e)) if e.name().as_ref() == "style" => {
                 assert!(writer.write_event(Event::Start(e)).is_ok());
                 loop {
                     match reader.read_event() {
@@ -291,7 +291,7 @@ fn patch_illustration(illustration: String) -> Result<String> {
 
                         // Fix style on some images, like 3706
                         Ok(Event::CData(data)) => {
-                            let mut cdata = String::from_utf8(Vec::from(data.clone().into_inner()))?;
+                            let mut cdata = data.clone().into_inner().into_owned();
                             if !cdata.contains("fill-opacity:0.011765") {
                                 cdata.push_str(" .fil99 {fill:white;fill-opacity:0.011765}\r\n");
                             }
@@ -306,18 +306,15 @@ fn patch_illustration(illustration: String) -> Result<String> {
             }
 
             // Locate all <g id=CC_HOTSPOT> for class patching on some images, like 3706
-            Ok(Event::Start(ref e)) if e.clone().name().as_ref() == b"g" => {
-                if let Some(id) = match &e.try_get_attribute(b"id") {
-                    Ok(Some(a)) => match String::from_utf8(a.value.clone().to_vec()) {
-                        Ok(a) => Some(a),
-                        _ => None,
-                    }
+            Ok(Event::Start(ref e)) if e.clone().name().as_ref() == "g" => {
+                if let Some(id) = match &e.try_get_attribute("id") {
+                    Ok(Some(a)) => Some(a.value.clone().into_owned()),
                     _ => None,
                 } {
                     match id.as_str() {
                         "CC_HOTSPOT" => {
                             assert!(writer.write_event(Event::Start(e.clone())).is_ok());
-                            let type_to_patch: Vec<&[u8]> = vec![b"path", b"polygon", b"rect"];
+                            let type_to_patch: Vec<&str> = vec!["path", "polygon", "rect"];
                             loop {
                                 match reader.read_event() {
                                     Ok(Event::Empty(ref e))  if type_to_patch.contains(&e.clone().name().as_ref()) => {
@@ -326,14 +323,14 @@ fn patch_illustration(illustration: String) -> Result<String> {
                                         let new_attrs = elem.attributes()
                                             .filter_map(|a| a.ok())
                                             .map(|attr| {
-                                                let mut value = String::from_utf8(attr.value.to_vec()).expect("Invalid UTF-8");
+                                                let mut value = attr.value.clone().into_owned();
                                                 match attr.key {
-                                                    QName(b"class") => {
+                                                    QName("class") => {
                                                         value.push_str(" fil99");
                                                     }
                                                     _ => {}
                                                 }
-                                                (String::from_utf8(attr.key.as_ref().to_vec()).expect("Invalid UTF-8"), value)
+                                                (attr.key.as_ref().to_string(), value)
                                             }).collect::<Vec<(String, String)>>();
 
                                         elem.clear_attributes();

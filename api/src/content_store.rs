@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{bail, Result};
-use sqlx::AnyPool;
+use sqlx::{AnyPool, AssertSqlSafe};
 use sqlx::any::AnyPoolOptions;
 use futures::stream::{StreamExt, TryStreamExt};
 use thiserror::Error;
@@ -235,7 +235,7 @@ impl ContentStore {
         // Postgres; a raw `?` is a syntax error there and the query silently fails.
         let q = self.q("SELECT id, parent_node_id, child_node_id FROM tree_node_links WHERE child_node_id = ?");
         let results: Vec<TreeNodeLinks> = block(
-            sqlx::query_as::<_, TreeNodeLinks>(&q)
+            sqlx::query_as::<_, TreeNodeLinks>(AssertSqlSafe(q.as_str()))
             .bind(id)
             .fetch_all(&self.pool)
         )?;
@@ -249,7 +249,7 @@ impl ContentStore {
     pub fn get_links(&self, parent_id: i32) -> Result<Vec<i32>> {
         let q = self.q("SELECT child_node_id FROM tree_node_links WHERE parent_node_id = ?");
         let results: Vec<(i32,)> = block(
-            sqlx::query_as::<_, (i32,)>(&q)
+            sqlx::query_as::<_, (i32,)>(AssertSqlSafe(q.as_str()))
             .bind(parent_id)
             .fetch_all(&self.pool)
         )?;
@@ -267,7 +267,7 @@ impl ContentStore {
                  WHERE tn.vehicle = ? AND tn.year = ? \
                  AND d.vehicle_component_with_document_index = ?");
         let results: Vec<Document> = block(
-            sqlx::query_as::<_, Document>(&q)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(q.as_str()))
             .bind(vehicle)
             .bind(year)
             .bind(apos_number)
@@ -298,7 +298,7 @@ impl ContentStore {
         );
         let q = self.q(&sql);
         let mut results: Vec<Document> = block(
-            sqlx::query_as::<_, Document>(&q)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(q.as_str()))
             .bind(node_id)
             .fetch_all(&self.pool)
         )?;
@@ -324,7 +324,7 @@ impl ContentStore {
         );
         let q = self.q(&sql);
         let mut results: Vec<Document> = block(
-            sqlx::query_as::<_, Document>(&q)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(q.as_str()))
             .bind(vehicle)
             .bind(year)
             .fetch_all(&self.pool)
@@ -348,7 +348,7 @@ impl ContentStore {
                      ORDER BY anc.depth DESC";
         let q = self.q(sql);
         let results: Vec<TreeNodePath> = block(
-            sqlx::query_as::<_, TreeNodePath>(&q)
+            sqlx::query_as::<_, TreeNodePath>(AssertSqlSafe(q.as_str()))
             .bind(node_id)
             .fetch_all(&self.pool)
         )?;
@@ -386,7 +386,7 @@ impl ContentStore {
 
         let sql = self.q(&sql);
         let mut results: Vec<Document> = block(
-            sqlx::query_as::<_, Document>(&sql)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(sql.as_str()))
                 .bind(vehicle)
                 .bind(year)
                 .bind(&like)
@@ -440,7 +440,7 @@ impl ContentStore {
 
         let sql = self.q(&sql);
         let mut results: Vec<Document> = block(
-            sqlx::query_as::<_, Document>(&sql)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(sql.as_str()))
                 .bind(node_id)
                 .bind(&like)
                 .bind(&like)
@@ -461,7 +461,7 @@ impl ContentStore {
                  WHERE tnl.parent_node_id = ? \
                  ORDER BY tn.location");
         let results: Vec<TreeNode> = block(
-            sqlx::query_as::<_, TreeNode>(&q)
+            sqlx::query_as::<_, TreeNode>(AssertSqlSafe(q.as_str()))
             .bind(node_id)
             .fetch_all(&self.pool)
         )?;
@@ -476,7 +476,7 @@ impl ContentStore {
                  ) \
                  SELECT COUNT(*) FROM document_links dl WHERE dl.node_id IN (SELECT id FROM sub)");
         let (cnt,): (i64,) = block(
-            sqlx::query_as::<_, (i64,)>(&q)
+            sqlx::query_as::<_, (i64,)>(AssertSqlSafe(q.as_str()))
             .bind(node_id)
             .fetch_one(&self.pool)
         )?;
@@ -487,7 +487,7 @@ impl ContentStore {
         let q = self.q("SELECT node_id, vehicle, year, node_value, name, illustration_id, location, filter_applies \
                  FROM tree_nodes WHERE node_id = ?");
         let result = block(
-            sqlx::query_as::<_, TreeNode>(&q)
+            sqlx::query_as::<_, TreeNode>(AssertSqlSafe(q.as_str()))
             .bind(node_id)
             .fetch_optional(&self.pool)
         )?;
@@ -499,7 +499,7 @@ impl ContentStore {
                  description, hook_code, model_series, order_type, tool_order_number, state \
                  FROM tools WHERE tool_number_pag = ?");
         let result = block(
-            sqlx::query_as::<_, Tool>(&q)
+            sqlx::query_as::<_, Tool>(AssertSqlSafe(q.as_str()))
             .bind(tool_id)
             .fetch_optional(&self.pool)
         )?;
@@ -513,7 +513,7 @@ impl ContentStore {
                  JOIN tool_distributors_links tdl ON tdl.tool_distributor_id = td.id \
                  WHERE tdl.tool_id = ?");
         let results: Vec<ToolDistributor> = block(
-            sqlx::query_as::<_, ToolDistributor>(&q)
+            sqlx::query_as::<_, ToolDistributor>(AssertSqlSafe(q.as_str()))
             .bind(tool_id)
             .fetch_all(&self.pool)
         )?;
@@ -530,7 +530,7 @@ impl ContentStore {
                  WHERE tn.vehicle = ? AND tn.year = ? \
                  AND d.hkap_id IN (SELECT hkap_id FROM referencing_tool_documents WHERE tool_id = ?)");
         let results: Vec<Document> = block(
-            sqlx::query_as::<_, Document>(&q)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(q.as_str()))
             .bind(&vehicle)
             .bind(year)
             .bind(tool_id)
@@ -544,7 +544,7 @@ impl ContentStore {
         let q = self.q("SELECT node_id, vehicle, year, node_value, name, illustration_id, location, filter_applies \
                  FROM tree_nodes WHERE vehicle = ? AND year = ? AND location = ?");
         let result = block(
-            sqlx::query_as::<_, TreeNode>(&q)
+            sqlx::query_as::<_, TreeNode>(AssertSqlSafe(q.as_str()))
             .bind(vehicle)
             .bind(year)
             .bind(&loc)
@@ -556,7 +556,7 @@ impl ContentStore {
     pub fn get_illustration(&self, illustration_id: i32) -> Result<String> {
         let q = self.q("SELECT content FROM illustrations WHERE illustration_id = ?");
         let result = block(
-            sqlx::query_as::<_, (String,)>(&q)
+            sqlx::query_as::<_, (String,)>(AssertSqlSafe(q.as_str()))
             .bind(illustration_id)
             .fetch_optional(&self.pool)
         )?;
@@ -566,7 +566,7 @@ impl ContentStore {
     pub fn get_tool_image(&self, image_id: &String) -> Result<Vec<u8>> {
         let q = self.q("SELECT content FROM tool_images WHERE id = ?");
         let result = block(
-            sqlx::query_as::<_, (Vec<u8>,)>(&q)
+            sqlx::query_as::<_, (Vec<u8>,)>(AssertSqlSafe(q.as_str()))
             .bind(image_id)
             .fetch_optional(&self.pool)
         )?;
@@ -579,7 +579,7 @@ impl ContentStore {
                  vehicle_component_with_document_index, new, bookmarked, content \
                  FROM documents WHERE hkap_id = ?");
         let result = block(
-            sqlx::query_as::<_, Document>(&q)
+            sqlx::query_as::<_, Document>(AssertSqlSafe(q.as_str()))
             .bind(hkap_id)
             .fetch_optional(&self.pool)
         )?;
@@ -602,7 +602,7 @@ impl ContentStore {
              FROM documents WHERE hkap_id IN ({})",
             placeholders
         );
-        let mut q = sqlx::query_as::<_, Document>(&sql);
+        let mut q = sqlx::query_as::<_, Document>(AssertSqlSafe(sql.as_str()));
         for id in &hkap_ids {
             q = q.bind(id.as_str());
         }
@@ -615,7 +615,7 @@ impl ContentStore {
     pub fn get_media(&self, media_id: &String) -> Result<Vec<u8>> {
         let q = self.q("SELECT content FROM media_images WHERE id = ?");
         let result = block(
-            sqlx::query_as::<_, (Vec<u8>,)>(&q)
+            sqlx::query_as::<_, (Vec<u8>,)>(AssertSqlSafe(q.as_str()))
             .bind(media_id)
             .fetch_optional(&self.pool)
         )?;
@@ -625,7 +625,7 @@ impl ContentStore {
     pub fn get_workshop_image(&self, image_id: i32, size: &String) -> Result<Vec<u8>> {
         let q = self.q("SELECT content FROM workshop_images WHERE id = ? AND size = ?");
         let result = block(
-            sqlx::query_as::<_, (Vec<u8>,)>(&q)
+            sqlx::query_as::<_, (Vec<u8>,)>(AssertSqlSafe(q.as_str()))
             .bind(image_id)
             .bind(size)
             .fetch_optional(&self.pool)
@@ -639,7 +639,7 @@ impl ContentStore {
                 let q = self.q("INSERT INTO translations (key, value) VALUES (?, ?) \
                          ON CONFLICT(key) DO UPDATE SET value = excluded.value");
                 block(
-                    sqlx::query(&q)
+                    sqlx::query(AssertSqlSafe(q.as_str()))
                     .bind(key)
                     .bind(value)
                     .execute(&self.pool)
@@ -671,7 +671,7 @@ impl ContentStore {
                    name = excluded.name, illustration_id = excluded.illustration_id, \
                    location = excluded.location, filter_applies = excluded.filter_applies");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(node.node_id())
             .bind(vehicle)
             .bind(year)
@@ -697,7 +697,7 @@ impl ContentStore {
                    tool_order_number = excluded.tool_order_number, state = excluded.state \
                  RETURNING id");
         let row: (i32,) = block(
-            sqlx::query_as::<_, (i32,)>(&q)
+            sqlx::query_as::<_, (i32,)>(AssertSqlSafe(q.as_str()))
             .bind(&tool.title)
             .bind(&tool.tool_number_pag)
             .bind(&tool.tool_number_vw)
@@ -719,7 +719,7 @@ impl ContentStore {
             let q = self.q("INSERT INTO tool_distributors_links (tool_id, tool_distributor_id) VALUES (?, ?) \
                      ON CONFLICT(tool_id, tool_distributor_id) DO NOTHING");
             block(
-                sqlx::query(&q)
+                sqlx::query(AssertSqlSafe(q.as_str()))
                 .bind(tool_id)
                 .bind(td_id)
                 .execute(&self.pool)
@@ -730,7 +730,7 @@ impl ContentStore {
             let q = self.q("INSERT INTO referencing_tool_documents (hkap_id, tool_id) VALUES (?, ?) \
                      ON CONFLICT(tool_id, hkap_id) DO NOTHING");
             block(
-                sqlx::query(&q)
+                sqlx::query(AssertSqlSafe(q.as_str()))
                 .bind(&ref_doc.hkap_id)
                 .bind(tool_id)
                 .execute(&self.pool)
@@ -752,7 +752,7 @@ impl ContentStore {
                    modification_date = excluded.modification_date, key = excluded.key \
                  RETURNING id");
         let row: (i32,) = block(
-            sqlx::query_as::<_, (i32,)>(&q)
+            sqlx::query_as::<_, (i32,)>(AssertSqlSafe(q.as_str()))
             .bind(&td.name)
             .bind(&td.part_number)
             .bind(&td.distributor_code)
@@ -775,7 +775,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO illustrations (illustration_id, content) VALUES (?, ?) \
                  ON CONFLICT(illustration_id) DO UPDATE SET content = excluded.content");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(illustration_id)
             .bind(content)
             .execute(&self.pool)
@@ -786,7 +786,7 @@ impl ContentStore {
     pub fn get_vehicle(&self, year: i32, vehicle: &String) -> Result<Vehicle> {
         let q = self.q("SELECT id, year, vehicle, name, image FROM vehicles WHERE year = ? AND vehicle = ?");
         let result = block(
-            sqlx::query_as::<_, Vehicle>(&q)
+            sqlx::query_as::<_, Vehicle>(AssertSqlSafe(q.as_str()))
             .bind(year)
             .bind(vehicle)
             .fetch_optional(&self.pool)
@@ -830,7 +830,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO document_text (hkap_id, text, text_squished) VALUES (?, ?, ?) \
                  ON CONFLICT(hkap_id) DO UPDATE SET text = excluded.text, text_squished = excluded.text_squished");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(hkap_id)
             .bind(text)
             .bind(squished)
@@ -860,7 +860,7 @@ impl ContentStore {
     pub fn has_document_text(&self, hkap_id: &str) -> Result<bool> {
         let q = self.q("SELECT COUNT(*) FROM document_text WHERE hkap_id = ?");
         let (n,): (i64,) = block(
-            sqlx::query_as::<_, (i64,)>(&q)
+            sqlx::query_as::<_, (i64,)>(AssertSqlSafe(q.as_str()))
             .bind(hkap_id)
             .fetch_one(&self.pool)
         )?;
@@ -871,7 +871,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO media_images (id, content) VALUES (?, ?) \
                  ON CONFLICT(id) DO UPDATE SET content = excluded.content");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(image_id)
             .bind(image)
             .execute(&self.pool)
@@ -893,7 +893,7 @@ impl ContentStore {
                 .try_for_each_concurrent(DB_CONCURRENCY, |(id, content)| {
                     let q = &q;
                     async move {
-                        sqlx::query(q).bind(id).bind(content).execute(&self.pool).await.map(|_| ())
+                        sqlx::query(AssertSqlSafe(q.as_str())).bind(id).bind(content).execute(&self.pool).await.map(|_| ())
                     }
                 })
                 .await
@@ -915,7 +915,7 @@ impl ContentStore {
                     let q = &q;
                     async move {
                         let squished = squish(&text);
-                        sqlx::query(q).bind(hkap_id).bind(text).bind(squished).execute(&self.pool).await.map(|_| ())
+                        sqlx::query(AssertSqlSafe(q.as_str())).bind(hkap_id).bind(text).bind(squished).execute(&self.pool).await.map(|_| ())
                     }
                 })
                 .await
@@ -928,7 +928,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO tool_images (id, content) VALUES (?, ?) \
                  ON CONFLICT(id) DO UPDATE SET content = excluded.content");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(image_id)
             .bind(image)
             .execute(&self.pool)
@@ -940,7 +940,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO workshop_images (id, size, content) VALUES (?, ?, ?) \
                  ON CONFLICT(id, size) DO UPDATE SET content = excluded.content");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(id)
             .bind(size)
             .bind(image)
@@ -953,7 +953,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO document_links (node_id, hkap_id) VALUES (?, ?) \
                  ON CONFLICT(node_id, hkap_id) DO NOTHING");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(node_id)
             .bind(hkap_id)
             .execute(&self.pool)
@@ -974,7 +974,7 @@ impl ContentStore {
                    vehicle_component_with_document_index = excluded.vehicle_component_with_document_index, \
                    new = excluded.new, bookmarked = excluded.bookmarked, content = excluded.content");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(&document.hkap_id)
             .bind(&document.variant_id)
             .bind(&document.language_code)
@@ -999,7 +999,7 @@ impl ContentStore {
         let q = self.q("INSERT INTO tree_node_links (parent_node_id, child_node_id) VALUES (?, ?) \
                  ON CONFLICT(parent_node_id, child_node_id) DO NOTHING");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(parent)
             .bind(child)
             .execute(&self.pool)
@@ -1013,7 +1013,7 @@ impl ContentStore {
                  ON CONFLICT(vehicle, year, vehicle_component, part_id) DO UPDATE SET \
                    paw_relevant = excluded.paw_relevant, text = excluded.text");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(vehicle)
             .bind(year)
             .bind(vehicle_component)
@@ -1029,7 +1029,7 @@ impl ContentStore {
         if let Ok(existing) = self.get_vehicle(vehicle.year, &vehicle.vehicle) {
             let q = self.q("UPDATE vehicles SET name = ? WHERE id = ?");
             block(
-                sqlx::query(&q)
+                sqlx::query(AssertSqlSafe(q.as_str()))
                     .bind(&vehicle.name)
                     .bind(existing.id)
                     .execute(&self.pool)
@@ -1037,7 +1037,7 @@ impl ContentStore {
             if !vehicle.image.is_empty() {
                 let q = self.q("UPDATE vehicles SET image = ? WHERE id = ?");
                 block(
-                    sqlx::query(&q)
+                    sqlx::query(AssertSqlSafe(q.as_str()))
                         .bind(&vehicle.image)
                         .bind(existing.id)
                         .execute(&self.pool)
@@ -1047,7 +1047,7 @@ impl ContentStore {
         }
         let q = self.q("INSERT INTO vehicles (year, vehicle, name, image) VALUES (?, ?, ?, ?)");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(vehicle.year)
             .bind(&vehicle.vehicle)
             .bind(&vehicle.name)
@@ -1065,7 +1065,7 @@ impl ContentStore {
                    name = excluded.name, illustration_id = excluded.illustration_id, \
                    location = excluded.location, filter_applies = excluded.filter_applies");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(node.node_id)
             .bind(&node.vehicle)
             .bind(node.year)
@@ -1091,7 +1091,7 @@ impl ContentStore {
                    vehicle_component_with_document_index = excluded.vehicle_component_with_document_index, \
                    new = excluded.new, bookmarked = excluded.bookmarked, content = excluded.content");
         block(
-            sqlx::query(&q)
+            sqlx::query(AssertSqlSafe(q.as_str()))
             .bind(&document.hkap_id)
             .bind(&document.variant_id)
             .bind(&document.language_code)

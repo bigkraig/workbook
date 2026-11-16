@@ -124,23 +124,45 @@ fn media_cloud_file_id_from_metadata(content: &[u8]) -> MediaIdLookup {
     }
 }
 
-/// Try to extract text from a PDF. Both pdf-extract versions panic on
-/// different malformed inputs, so we try 0.10 first and fall back to 0.7;
-/// each call is wrapped in `catch_unwind`.
+/// Try to extract text from a PDF with both pdf-extract versions and keep the
+/// better result; each call is wrapped in `catch_unwind`.
 ///
-/// Empirically these two versions disagree on ~36 of our 408 PDFs: 0.10
-/// handles function-type-4 PDFs that 0.7 panics on, while 0.7 handles 16
-/// PDFs with non-UTF-8 CMap streams that 0.10 panics on. Only 2 PDFs in the
-/// corpus defeat both.
+/// Neither version wins outright (measured 2026-11-16 over the 602 PDFs in
+/// source_files/ + generated/): 0.12 panics on 3 that 0.7 handles (two R8
+/// valve-gear/chain-drive splits and their source manual), and on ~11 PCNA
+/// bulletins it "succeeds" with mis-decoded font glyphs — garbage that breaks
+/// search — while fixing others that 0.7/0.10 truncated. So run both and pick
+/// by `word_char_fraction`. The 0.7 copy pins an old lopdf (RUSTSEC-2026-0187,
+/// stack overflow on hostile PDFs) — acceptable because only the offline
+/// loaders reach it, on our own committed PDFs.
 pub fn extract_pdf_text(bytes: &[u8]) -> Option<String> {
     // Thread-safe quiet setup (idempotent) — required because this runs on the
     // rayon pool during loads. NOTE: do not silence via per-call fd redirection;
     // that races across threads on the process-global stdout/stderr fds.
     install_quiet_panic_hook();
-    if let Some(text) = try_with(bytes, |b| pdf_extract::extract_text_from_mem(b).ok()) {
-        return Some(text);
+    let new = try_with(bytes, |b| pdf_extract::extract_text_from_mem(b).ok());
+    let old = try_with(bytes, |b| pdf_extract_old::extract_text_from_mem(b).ok());
+    match (new, old) {
+        (Some(new), Some(old)) if word_char_fraction(&old) > word_char_fraction(&new) => Some(old),
+        (new, old) => new.or(old),
     }
-    try_with(bytes, |b| pdf_extract_old::extract_text_from_mem(b).ok())
+}
+
+/// Fraction of characters that sit in runs of 3+ ASCII letters. Real prose
+/// scores ~0.7; mis-decoded glyph soup scores well under 0.2.
+fn word_char_fraction(text: &str) -> f64 {
+    let (mut total, mut in_words, mut run) = (0usize, 0usize, 0usize);
+    for ch in text.chars() {
+        total += 1;
+        if ch.is_ascii_alphabetic() {
+            run += 1;
+        } else {
+            if run >= 3 { in_words += run; }
+            run = 0;
+        }
+    }
+    if run >= 3 { in_words += run; }
+    in_words as f64 / total.max(1) as f64
 }
 
 fn try_with<F>(bytes: &[u8], extract: F) -> Option<String>
@@ -150,7 +172,8 @@ where
     let bytes = bytes.to_vec();
     let result = panic::catch_unwind(panic::AssertUnwindSafe(move || extract(&bytes)));
     match result {
-        Ok(Some(text)) if !text.trim().is_empty() => Some(text),
+        // Postgres TEXT can't hold NUL; some PDFs' glyph maps decode to it.
+        Ok(Some(text)) if !text.trim().is_empty() => Some(text.replace('\0', "")),
         _ => None,
     }
 }
