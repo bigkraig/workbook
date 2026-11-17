@@ -169,16 +169,21 @@ a:not([href]):not([class]), a:not([href]):not([class]):hover {
   text-decoration: none;
 }
 
+/* Numbered steps: index column + content column. A grid rather than display:table — an
+   auto-layout table can't shrink below its content's min-content width, so a nested
+   document with a wide data table pushed the whole page wider than a phone screen.
+   `auto` keeps the index column aligned across rows like the table did; minmax(0,1fr)
+   lets the content column shrink. */
 .plot-table {
-  display: table
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr)
 }
 
 .plot-element {
-  display: table-row
+  display: contents
 }
 
 .plot-information {
-  display: table-cell;
   vertical-align: top;
   border-top: 15px solid transparent
 }

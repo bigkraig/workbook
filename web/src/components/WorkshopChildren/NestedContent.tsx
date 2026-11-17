@@ -62,7 +62,9 @@ export function NestedContent({
         </span>
         </div>
       </div>
-      <div _content-nested="" className="pt-4 w-[1000px]">
+      {/* Capped, not fixed: a hard 1000px forced every document with a cross-reference
+          wider than a phone screen, even while the nested document was closed. */}
+      <div _content-nested="" className="pt-4 w-full max-w-[1000px]">
         {open && <DocumentSelection _content-nested="" documentType={documentType ?? ""}
                                     aposNumber={aposNumber ?? ""}
                                     inline={inline} translations={translations}/>}

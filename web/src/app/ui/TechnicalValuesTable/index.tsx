@@ -115,7 +115,7 @@ function InnerTechnicalValuesTable({items, translations}: { items: Techvalue[], 
 
   return (
     <div className="pt-4 px-4 grow flex flex-col">
-      <table className="flex flex-col">
+      <table className="flex flex-col overflow-x-auto">
         <thead>
         {table.getHeaderGroups().map(headerGroup => (
           <tr key={headerGroup.id} className="border-b-2 flex flex-row grow">

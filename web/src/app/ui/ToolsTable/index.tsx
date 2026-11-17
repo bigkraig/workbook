@@ -110,7 +110,7 @@ function InnerToolsTable({year, vehicle, items, translations}: { year: number, v
   // TODO Make tool link to tool page
   return (
     <div _content-tools-table="" className="p-4 px-4 grow flex flex-col">
-      <table _content-tools-table="" className="flex flex-col">
+      <table _content-tools-table="" className="flex flex-col overflow-x-auto">
         <thead _content-tools-table="">
         {table.getHeaderGroups().map(headerGroup => (
           <tr _content-tools-table="" key={headerGroup.id} className="border-b-2 flex flex-row grow">

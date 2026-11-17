@@ -60,7 +60,7 @@ function InnerPartsTable({items, translations}: { items: Part[], translations: M
 
   return (
     <div _content-parts-table="" className="p-4 px-4 grow flex flex-col">
-      <table _content-parts-table="" className="flex flex-col">
+      <table _content-parts-table="" className="flex flex-col overflow-x-auto">
         <thead _content-parts-table="">
         {table.getHeaderGroups().map(headerGroup => (
           <tr _content-parts-table="" key={headerGroup.id} className="border-b-2 flex flex-row grow">
