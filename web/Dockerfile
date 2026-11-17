@@ -1,7 +1,7 @@
 # Pinned to a specific patched Node 22 LTS ("Jod") on Alpine 3.24, by digest, so
 # builds are reproducible and immune to tag re-pushes. Bump the version + digest to
 # pick up base-image security patches (docker pull node:22-alpine && docker inspect).
-FROM node:22.23.4-alpine3.24@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS base
+FROM node:22.23.5-alpine3.24@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS base
 
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
