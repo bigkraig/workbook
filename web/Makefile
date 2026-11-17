@@ -4,8 +4,8 @@ VERSION               := $(shell cat VERSION)
 GIT_HASH              := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 CONTAINER_NAME        ?= workbook
 NETWORK               ?= linuxserver
-NEXT_PUBLIC_API_HOST       ?= http://workbook-api:3030
-NEXT_PUBLIC_API_IMAGE_HOST ?= http://workbook-api:3030
+NEXT_PUBLIC_API_HOST       ?= https://workbook.birdstreetexotics.com
+NEXT_PUBLIC_API_IMAGE_HOST ?= https://workbook.birdstreetexotics.com
 NEXT_PUBLIC_AUTH_BYPASS    ?= false
 
 .PHONY: help build push release bump-patch run deploy clean version

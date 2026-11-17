@@ -1,5 +1,5 @@
-NEXT_PUBLIC_API_HOST       ?= http://workbook-api:3030
-NEXT_PUBLIC_API_IMAGE_HOST ?= http://workbook-api:3030
+NEXT_PUBLIC_API_HOST       ?= https://workbook.birdstreetexotics.com
+NEXT_PUBLIC_API_IMAGE_HOST ?= https://workbook.birdstreetexotics.com
 
 .PHONY: help build push release bump-patch version
 

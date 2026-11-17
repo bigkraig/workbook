@@ -80,7 +80,7 @@ export default function Home() {
               <div className="col-span-8">{toolData.description}</div>
               <div className="col-span-4">Photo</div>
               <div className="col-span-8">
-                <Image _content-tools-table="" src={GetToolImageUrl(toolData.title)} alt={toolData.tool_number_pag}
+                <Image _content-tools-table="" src={GetToolImageUrl(toolData.tool_number_pag)} alt={toolData.tool_number_pag}
                        width={150} height={0}/>
               </div>
             </div>
@@ -286,7 +286,7 @@ function InnerTable({
 
   return (
     <div className="p-4 px-4 grow flex flex-col">
-      <table className="flex flex-col">
+      <table className="flex flex-col overflow-x-auto">
         <thead>
         {table.getHeaderGroups().map(headerGroup => (
           <tr key={headerGroup.id} className="border-b-2 flex flex-row grow">
