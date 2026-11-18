@@ -1,0 +1,49 @@
+# Xcode project definition (XcodeGen). Regenerate after adding/removing files:
+#   cd ios && xcodegen generate
+name: Workbook
+options:
+  bundleIdPrefix: com.birdstreetexotics
+  deploymentTarget:
+    iOS: "27.1"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: 96A2DBRK62
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Workbook:
+    type: application
+    platform: iOS
+    sources:
+      - Workbook
+    settings:
+      base:
+        # com.birdstreetexotics.workbook is the Sign in with Apple *Services ID* used by the
+        # web login gate, so the app needs a different identifier.
+        PRODUCT_BUNDLE_IDENTIFIER: com.birdstreetexotics.workbook.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+    info:
+      path: Workbook/Info.plist
+      properties:
+        CFBundleDisplayName: Workbook
+        UILaunchScreen:
+          UIColorName: Ink
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          # Development against a local API (http://localhost:3030) only.
+          NSAllowsLocalNetworking: true
+        ITSAppUsesNonExemptEncryption: false
