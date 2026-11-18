@@ -30,6 +30,8 @@ targets:
       path: Workbook/Info.plist
       properties:
         CFBundleDisplayName: Workbook
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen:
           UIColorName: Ink
         UIApplicationSceneManifest:
