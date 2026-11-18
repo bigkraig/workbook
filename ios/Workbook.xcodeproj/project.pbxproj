@@ -21,6 +21,7 @@
 		930722EE96B0C432D5B08834 /* DocumentScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26B46DE10C33D7B3CE0BAD2E /* DocumentScreen.swift */; };
 		9F955FEE5986487EAE2E90DB /* ContentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE10F599C938B0B706D8291C /* ContentViews.swift */; };
 		A5CB969D508B6BF9966D283D /* WorkbookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55B255F5C122D981CCB5B04 /* WorkbookApp.swift */; };
+		BED99E92C8E9B063BA958AA4 /* IllustrationNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBE95B55465FDA5E9ABB368 /* IllustrationNavigator.swift */; };
 		C258A2B5D105798CE001C996 /* VehicleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B26EEAD5604E7E878A50B6F /* VehicleListView.swift */; };
 		C82AF0E03F78638DB15BB846 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D08720DAD3E43EBD8F69 /* API.swift */; };
 		CD3036FAF4F94830A5B0B79F /* WorkbenchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5178498CD9F5B2733ABA3E /* WorkbenchView.swift */; };
@@ -48,6 +49,7 @@
 		B5BAD4424329DA5DC4073346 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C6CE3FB0CDC594AE597A8F8F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D1FC19DAD16C503B0E42009F /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
+		DEBE95B55465FDA5E9ABB368 /* IllustrationNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IllustrationNavigator.swift; sourceTree = "<group>"; };
 		ED7752822D6D52AB4909DD4C /* Navigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigator.swift; sourceTree = "<group>"; };
 		EE10F599C938B0B706D8291C /* ContentViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentViews.swift; sourceTree = "<group>"; };
 		F1C66775AD73EA1705371C7F /* Workbook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Workbook.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				D1FC19DAD16C503B0E42009F /* BrowseView.swift */,
+				DEBE95B55465FDA5E9ABB368 /* IllustrationNavigator.swift */,
 				93971561F8F154ED34CD039E /* MediaViews.swift */,
 				22696D432C49A8FE5A3B8478 /* SignInView.swift */,
 				4C4D1217264DCCDC06E82F87 /* ToolScreen.swift */,
@@ -224,6 +227,7 @@
 				9F955FEE5986487EAE2E90DB /* ContentViews.swift in Sources */,
 				7A6C00F46955F4C24E1C57FE /* DocumentModel.swift in Sources */,
 				930722EE96B0C432D5B08834 /* DocumentScreen.swift in Sources */,
+				BED99E92C8E9B063BA958AA4 /* IllustrationNavigator.swift in Sources */,
 				3034357694AE47286938F00C /* InlineHTML.swift in Sources */,
 				0FE112ED77F0AE4B679FB6B2 /* MediaViews.swift in Sources */,
 				59CDD657875831CE4668226B /* Models.swift in Sources */,

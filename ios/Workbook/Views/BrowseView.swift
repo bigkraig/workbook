@@ -49,6 +49,12 @@ struct BrowseView: View {
                     prompt: "Search \(vehicle.name) documents")
         .task(id: "\(settings.sessionGeneration)") { await load() }
         .task(id: query) { await search() }
+        .onChange(of: navigator.pendingSearch, initial: true) { _, pending in
+            // A deep link asked for a search of this vehicle.
+            guard node == nil, let pending else { return }
+            query = pending
+            navigator.pendingSearch = nil
+        }
     }
 
     @ViewBuilder
@@ -61,6 +67,12 @@ struct BrowseView: View {
                        message: message) { Task { await load() } }
         case .loaded(let level):
             VStack(spacing: 0) {
+                if let illustration = level.illustrationId, illustration > 0, !(level.children ?? []).isEmpty {
+                    IllustrationNavigator(illustrationId: illustration,
+                                          targets: IllustrationNavigator.targets(for: level.children ?? [])) {
+                        navigator.nodes.append($0)
+                    }
+                }
                 ForEach(level.children ?? []) { child in
                     Button { navigator.nodes.append(child) } label: {
                         HStack(spacing: 12) {

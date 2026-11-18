@@ -52,12 +52,13 @@ struct DocumentScreen: View {
             }
         }
         .background(Theme.paper)
-        .navigationTitle(summary.title)
+        .navigationTitle(model.state.value?.title ?? summary.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar { toolbar(model) }
         .task(id: "\(summary.hkapId)#\(settings.sessionGeneration)") {
             await model.load(api: API(settings: settings))
+            if let document = model.state.value { navigator.loaded(document) }
         }
         .sheet(item: $sheet) { sheet in
             if let document = model.state.value { referenceSheet(sheet, document) }

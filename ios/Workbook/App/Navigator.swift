@@ -40,6 +40,11 @@ final class Navigator {
     /// Inner screen: hide the browser and give the document both halves.
     var focused = false
     var recents: [Recent] = []
+    /// Search text a deep link asked for; the vehicle's root browser picks it up.
+    var pendingSearch: String?
+    /// A deep link that arrived before sign-in (or before the vehicle list
+    /// could be loaded); retried when the session changes.
+    var pendingLink: URL?
     /// UI strings the server's documents refer to by key (`$LblFrom$`).
     var translations: [String: String] = [:]
 
@@ -121,8 +126,60 @@ final class Navigator {
         return model
     }
 
+    /// Open a `workbook://` deep link (from Carnet or anywhere else):
+    ///
+    ///     workbook://vehicle/2016/981810
+    ///     workbook://vehicle/2016/981810/document/75104700
+    ///     workbook://vehicle/2016/981810/tool/VAS%206910
+    ///     workbook://vehicle/2016/981810/search?q=brake%20fluid
+    ///
+    /// `workbook://session` is the sign-in callback, not a link.
+    @MainActor
+    func open(link url: URL, api: API) async {
+        guard url.scheme == "workbook", url.host() == "vehicle" else { return }
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count >= 2, let year = Int(parts[0]) else { return }
+        do {
+            guard let match = try await api.vehicles().first(where: { $0.year == year && $0.vehicle == parts[1] }) else {
+                pendingLink = nil
+                return
+            }
+            pendingLink = nil
+            vehicle = match
+            // Same vehicle as before keeps its stacks (didSet only clears on change).
+            nodes = []
+            detail = []
+            focused = false
+            guard parts.count >= 3 else { return }
+            switch parts[2] {
+            case "document" where parts.count >= 4:
+                open(DocumentSummary(hkapId: parts[3], title: "", documentType: "", fileFormat: "xml",
+                                     vehicleComponent: nil, componentIndex: nil))
+            case "tool" where parts.count >= 4:
+                detail = [.tool(parts[3])]
+            case "search":
+                pendingSearch = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "q" })?.value
+            default:
+                break
+            }
+        } catch {
+            // Not signed in yet, or offline: keep it for after sign-in.
+            pendingLink = url
+        }
+    }
+
+    /// Record a document in Recents once its real title is known (documents
+    /// opened by deep link start without one).
+    func loaded(_ document: WorkshopDocument) {
+        remember(DocumentSummary(hkapId: document.hkapId, title: document.title,
+                                 documentType: document.documentType,
+                                 fileFormat: document.isPDF ? "pdf" : "xml",
+                                 vehicleComponent: nil, componentIndex: document.code))
+    }
+
     private func remember(_ document: DocumentSummary) {
-        guard let vehicle else { return }
+        guard let vehicle, !document.title.isEmpty else { return }
         let entry = Recent(vehicle: vehicle, document: document)
         recents.removeAll { $0.id == entry.id }
         recents.insert(entry, at: 0)

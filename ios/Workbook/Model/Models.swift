@@ -12,6 +12,8 @@ struct TreeNode: Codable, Hashable, Identifiable {
     let nodeValue: String
     let name: String?
     let illustrationId: Int?
+    /// Position code; the diagram's hotspots are keyed by it.
+    let location: String?
     let isFolder: Bool?
     let totalChildren: Int?
     let parentNodeId: Int?
@@ -22,7 +24,7 @@ struct TreeNode: Codable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case nodeId = "node_id", nodeValue = "node_value", name
-        case illustrationId = "illustration_id", isFolder = "is_folder"
+        case illustrationId = "illustration_id", location, isFolder = "is_folder"
         case totalChildren = "total_children", parentNodeId = "parent_node_id", children
     }
 }

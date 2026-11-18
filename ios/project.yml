@@ -43,6 +43,10 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # Deep links (workbook://vehicle/…); also the sign-in sheet's callback scheme.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.birdstreetexotics.workbook.app
+            CFBundleURLSchemes: [workbook]
         NSAppTransportSecurity:
           # Development against a local API (http://localhost:3030) only.
           NSAllowsLocalNetworking: true

@@ -28,7 +28,13 @@ struct RootView: View {
         }
         .background(Theme.ink.ignoresSafeArea())
         .fullScreenCover(isPresented: $settings.needsLogin) { SignInView() }
+        .onOpenURL { url in
+            Task { await navigator.open(link: url, api: API(settings: settings)) }
+        }
         .task(id: settings.sessionGeneration) {
+            if let link = navigator.pendingLink {
+                await navigator.open(link: link, api: API(settings: settings))
+            }
             if navigator.translations.isEmpty,
                let translations = try? await API(settings: settings).translations() {
                 navigator.translations = translations
