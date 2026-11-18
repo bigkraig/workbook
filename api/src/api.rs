@@ -8,7 +8,7 @@ use axum::{
 };
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
-use axum::http::{header};
+use axum::http::{header, HeaderMap};
 use axum::response::{Html, IntoResponse, Response};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -111,6 +111,7 @@ pub async fn serve(bind_address: &String, api: Api) -> Result<(), anyhow::Error>
         .route("/translations", get(get_translations));
 
     let app = Router::new()
+        .route("/v1/app/session", get(app_session))
         .nest("/v1/vehicles", vehicles_routes)
         .nest("/v1/vehicle_component_tree", vehicle_component_tree_routes)
         .nest("/v1/workshop_literature", workshop_literature_routes)
@@ -381,6 +382,34 @@ async fn get_tree_node(State(state): State<Arc<Api>>, Path(node_id): Path<i32>) 
     Ok(Json(result))
 }
 
+
+/// Hands the caller's login-gate session to the native app.
+///
+/// The app signs in through the gate in the system sign-in sheet
+/// (ASWebAuthenticationSession), which is the only place passkeys / the Sign in with
+/// Apple sheet work — but that sheet's cookies live in Safari's jar, not the app's. The
+/// sheet finishes by loading this endpoint, which is behind the gate like everything
+/// else: reaching it at all means the request carries a valid session. It redirects to
+/// the app's callback URL with the request's cookies, and the app installs them for its
+/// own requests.
+///
+/// The redirect target is fixed (never taken from the request), so this can't be used to
+/// send a session anywhere but the `workbook:` scheme.
+async fn app_session(headers: HeaderMap) -> Response {
+    let cookies = headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect::<Vec<_>>()
+        .join("; ");
+    let encoded = percent_encoding::utf8_percent_encode(&cookies, percent_encoding::NON_ALPHANUMERIC);
+    Response::builder()
+        .status(StatusCode::FOUND)
+        .header(header::LOCATION, format!("workbook://session?cookies={encoded}"))
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(Body::empty())
+        .unwrap()
+}
 
 async fn get_illustration(State(state): State<Arc<Api>>, Path(illustration_id): Path<i32>) -> Result<Html<String>, AppError> {
     let content = state.content_store.get_illustration(illustration_id)?;

@@ -59,6 +59,7 @@ lopdf = "0.47"
 pdf-extract = "0.12"
 pdf-extract-old = { package = "pdf-extract", version = "0.7" }
 libc = "0.2"
+percent-encoding = "2"
 
 [[bin]]
 name = "workbook"

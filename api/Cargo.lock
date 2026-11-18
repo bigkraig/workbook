@@ -3645,6 +3645,7 @@ dependencies = [
  "pcss",
  "pdf-extract 0.12.1",
  "pdf-extract 0.7.12",
+ "percent-encoding",
  "quick-xml",
  "rayon",
  "regex",
