@@ -364,6 +364,8 @@ impl ContentStore {
         let like = format!("%{}%", escape_like(query));
         let like_squished = format!("%{}%", escape_like(&squish(query)));
         let cast_content = if self.is_postgres { "convert_from(d.content, 'UTF8')" } else { "CAST(d.content AS TEXT)" };
+        // Case-insensitive match: SQLite's LIKE already is (for ASCII); Postgres needs ILIKE.
+        let like_op = if self.is_postgres { "ILIKE" } else { "LIKE" };
         let sql = format!(
             "SELECT DISTINCT d.hkap_id, d.variant_id, d.language_code, d.version, d.vehicle_component, \
              d.title, d.document_type, d.publication_date, d.file_format, \
@@ -373,13 +375,13 @@ impl ContentStore {
              JOIN tree_nodes tn ON tn.node_id = dl.node_id \
              WHERE tn.vehicle = ? AND tn.year = ? \
              AND (\
-               d.title LIKE ? ESCAPE '\\' \
-               OR d.vehicle_component_with_document_index LIKE ? ESCAPE '\\' \
-               OR (d.file_format = 'xml' AND {cast_content} LIKE ? ESCAPE '\\') \
+               d.title {like_op} ? ESCAPE '\\' \
+               OR d.vehicle_component_with_document_index {like_op} ? ESCAPE '\\' \
+               OR (d.file_format = 'xml' AND {cast_content} {like_op} ? ESCAPE '\\') \
                OR (d.file_format = 'pdf' AND EXISTS (\
                  SELECT 1 FROM document_text dt \
                  WHERE dt.hkap_id = d.hkap_id \
-                 AND (dt.text LIKE ? ESCAPE '\\' OR dt.text_squished LIKE ? ESCAPE '\\')\
+                 AND (dt.text {like_op} ? ESCAPE '\\' OR dt.text_squished LIKE ? ESCAPE '\\')\
                ))\
              )"
         );
@@ -414,6 +416,8 @@ impl ContentStore {
         let like = format!("%{}%", escape_like(query));
         let like_squished = format!("%{}%", escape_like(&squish(query)));
         let cast_content = if self.is_postgres { "convert_from(d.content, 'UTF8')" } else { "CAST(d.content AS TEXT)" };
+        // Case-insensitive match: SQLite's LIKE already is (for ASCII); Postgres needs ILIKE.
+        let like_op = if self.is_postgres { "ILIKE" } else { "LIKE" };
         let sql = format!(
             "WITH RECURSIVE sub(id) AS (\
                SELECT ? \
@@ -427,13 +431,13 @@ impl ContentStore {
              JOIN document_links dl ON dl.hkap_id = d.hkap_id \
              WHERE dl.node_id IN (SELECT id FROM sub) \
              AND (\
-               d.title LIKE ? ESCAPE '\\' \
-               OR d.vehicle_component_with_document_index LIKE ? ESCAPE '\\' \
-               OR (d.file_format = 'xml' AND {cast_content} LIKE ? ESCAPE '\\') \
+               d.title {like_op} ? ESCAPE '\\' \
+               OR d.vehicle_component_with_document_index {like_op} ? ESCAPE '\\' \
+               OR (d.file_format = 'xml' AND {cast_content} {like_op} ? ESCAPE '\\') \
                OR (d.file_format = 'pdf' AND EXISTS (\
                  SELECT 1 FROM document_text dt \
                  WHERE dt.hkap_id = d.hkap_id \
-                 AND (dt.text LIKE ? ESCAPE '\\' OR dt.text_squished LIKE ? ESCAPE '\\')\
+                 AND (dt.text {like_op} ? ESCAPE '\\' OR dt.text_squished LIKE ? ESCAPE '\\')\
                ))\
              )"
         );
