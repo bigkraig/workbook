@@ -6,8 +6,8 @@ import Observation
 /// The server sits behind a Sign in with Apple gate (oauth2-proxy): every
 /// unauthenticated request is redirected to Apple, and a host-only session
 /// cookie set after login authorizes the API, illustrations and PDFs. The app
-/// signs in once through an in-app web view and reuses that cookie natively
-/// (see CookieBridge / WebLoginView).
+/// signs in through the system sign-in sheet and is handed that cookie (see
+/// SignInView).
 @Observable
 final class AppSettings {
     static let defaultServer = "https://workbook.birdstreetexotics.com"
@@ -26,6 +26,11 @@ final class AppSettings {
         // lands in UserDefaults' argument domain, for simulator runs against a
         // local API.
         serverURL = UserDefaults.standard.string(forKey: Keys.serverURL) ?? Self.defaultServer
+        #if DEBUG
+        // `-workbook.debug.signin YES` shows the sign-in screen even against a
+        // local server that has no gate.
+        needsLogin = UserDefaults.standard.bool(forKey: "workbook.debug.signin")
+        #endif
     }
 
     var baseURL: URL {
@@ -41,7 +46,6 @@ final class AppSettings {
         if let cookies = HTTPCookieStorage.shared.cookies {
             cookies.forEach { HTTPCookieStorage.shared.deleteCookie($0) }
         }
-        CookieBridge.clearWebCookies()
         needsLogin = true
         sessionGeneration += 1
     }

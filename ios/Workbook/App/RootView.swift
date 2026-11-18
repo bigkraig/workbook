@@ -27,12 +27,7 @@ struct RootView: View {
             .animation(.snappy(duration: 0.25), value: navigator.focused)
         }
         .background(Theme.ink.ignoresSafeArea())
-        .sheet(isPresented: $settings.needsLogin) { LoginSheet() }
-        .task {
-            // Pick up a session from an earlier launch before the first request.
-            await CookieBridge.sync()
-            settings.sessionGeneration += 1
-        }
+        .fullScreenCover(isPresented: $settings.needsLogin) { SignInView() }
         .task(id: settings.sessionGeneration) {
             if navigator.translations.isEmpty,
                let translations = try? await API(settings: settings).translations() {

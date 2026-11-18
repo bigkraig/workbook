@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0FE112ED77F0AE4B679FB6B2 /* MediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93971561F8F154ED34CD039E /* MediaViews.swift */; };
 		1575B0909FEF017827F4B148 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50262858BF502C3ABA1FAEC9 /* Theme.swift */; };
+		1EBC4E07B40F066CEDC0CB59 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22696D432C49A8FE5A3B8478 /* SignInView.swift */; };
 		1ED3B6D2A145973DC1857D4C /* ToolScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C4D1217264DCCDC06E82F87 /* ToolScreen.swift */; };
 		3034357694AE47286938F00C /* InlineHTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84DBD5ED9BE448F9BF98404D /* InlineHTML.swift */; };
 		3118108E85AAB5594D0A2863 /* Posture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A92266F53065DE4222032 /* Posture.swift */; };
@@ -19,25 +20,22 @@
 		91CE80207CDBEA3BA21E5065 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B5BAD4424329DA5DC4073346 /* Assets.xcassets */; };
 		930722EE96B0C432D5B08834 /* DocumentScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26B46DE10C33D7B3CE0BAD2E /* DocumentScreen.swift */; };
 		9F955FEE5986487EAE2E90DB /* ContentViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE10F599C938B0B706D8291C /* ContentViews.swift */; };
-		A1FBB777D916A21E9A060CCD /* WebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38293B191C541709AA40B2C0 /* WebLoginView.swift */; };
 		A5CB969D508B6BF9966D283D /* WorkbookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F55B255F5C122D981CCB5B04 /* WorkbookApp.swift */; };
 		C258A2B5D105798CE001C996 /* VehicleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B26EEAD5604E7E878A50B6F /* VehicleListView.swift */; };
 		C82AF0E03F78638DB15BB846 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABC9D08720DAD3E43EBD8F69 /* API.swift */; };
 		CD3036FAF4F94830A5B0B79F /* WorkbenchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5178498CD9F5B2733ABA3E /* WorkbenchView.swift */; };
 		D61EB1A051F8326B589F0D23 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DF466A97857FBCF74810319 /* AppSettings.swift */; };
 		D6805F115E2E96CFB6884BA3 /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1FC19DAD16C503B0E42009F /* BrowseView.swift */; };
-		E27F1E26D460DA2D5F30DF29 /* CookieBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E2D8178EFA2B9333B4CB2A /* CookieBridge.swift */; };
 		FFD973D2B739F88C40C996A2 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303E53559114EAB1A1ED2755 /* RootView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		116754B6140A6B0E84FB6DC0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		22696D432C49A8FE5A3B8478 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		26B46DE10C33D7B3CE0BAD2E /* DocumentScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScreen.swift; sourceTree = "<group>"; };
-		29E2D8178EFA2B9333B4CB2A /* CookieBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieBridge.swift; sourceTree = "<group>"; };
 		2D6A92266F53065DE4222032 /* Posture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Posture.swift; sourceTree = "<group>"; };
 		2F5178498CD9F5B2733ABA3E /* WorkbenchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchView.swift; sourceTree = "<group>"; };
 		303E53559114EAB1A1ED2755 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
-		38293B191C541709AA40B2C0 /* WebLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebLoginView.swift; sourceTree = "<group>"; };
 		4C4D1217264DCCDC06E82F87 /* ToolScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolScreen.swift; sourceTree = "<group>"; };
 		50262858BF502C3ABA1FAEC9 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		5B26EEAD5604E7E878A50B6F /* VehicleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VehicleListView.swift; sourceTree = "<group>"; };
@@ -90,7 +88,6 @@
 			children = (
 				ABC9D08720DAD3E43EBD8F69 /* API.swift */,
 				9DF466A97857FBCF74810319 /* AppSettings.swift */,
-				29E2D8178EFA2B9333B4CB2A /* CookieBridge.swift */,
 			);
 			path = Networking;
 			sourceTree = "<group>";
@@ -110,9 +107,9 @@
 			children = (
 				D1FC19DAD16C503B0E42009F /* BrowseView.swift */,
 				93971561F8F154ED34CD039E /* MediaViews.swift */,
+				22696D432C49A8FE5A3B8478 /* SignInView.swift */,
 				4C4D1217264DCCDC06E82F87 /* ToolScreen.swift */,
 				5B26EEAD5604E7E878A50B6F /* VehicleListView.swift */,
-				38293B191C541709AA40B2C0 /* WebLoginView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -225,7 +222,6 @@
 				D6805F115E2E96CFB6884BA3 /* BrowseView.swift in Sources */,
 				52407E68A1548A0A376E2A8B /* Content.swift in Sources */,
 				9F955FEE5986487EAE2E90DB /* ContentViews.swift in Sources */,
-				E27F1E26D460DA2D5F30DF29 /* CookieBridge.swift in Sources */,
 				7A6C00F46955F4C24E1C57FE /* DocumentModel.swift in Sources */,
 				930722EE96B0C432D5B08834 /* DocumentScreen.swift in Sources */,
 				3034357694AE47286938F00C /* InlineHTML.swift in Sources */,
@@ -234,10 +230,10 @@
 				3C9B13B0F9CFF75E7217D3EF /* Navigator.swift in Sources */,
 				3118108E85AAB5594D0A2863 /* Posture.swift in Sources */,
 				FFD973D2B739F88C40C996A2 /* RootView.swift in Sources */,
+				1EBC4E07B40F066CEDC0CB59 /* SignInView.swift in Sources */,
 				1575B0909FEF017827F4B148 /* Theme.swift in Sources */,
 				1ED3B6D2A145973DC1857D4C /* ToolScreen.swift in Sources */,
 				C258A2B5D105798CE001C996 /* VehicleListView.swift in Sources */,
-				A1FBB777D916A21E9A060CCD /* WebLoginView.swift in Sources */,
 				CD3036FAF4F94830A5B0B79F /* WorkbenchView.swift in Sources */,
 				A5CB969D508B6BF9966D283D /* WorkbookApp.swift in Sources */,
 			);
