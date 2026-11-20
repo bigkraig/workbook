@@ -333,12 +333,12 @@ struct FigureViewer: View {
     }
 }
 
-/// A PDF document (bulletins, scanned manuals), paged vertically.
+/// A PDF document (bulletins, scanned manuals), scrolling vertically at the
+/// full width of its pane, with the pages' blank margins trimmed so the text
+/// is as large as the screen allows. Follows `model.pdfPage`.
 struct PDFReader: UIViewRepresentable {
     let data: Data
     let model: DocumentModel
-    /// Show one page at a time and follow `model.pdfPage` (workbench).
-    var singlePage = false
 
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
@@ -346,9 +346,11 @@ struct PDFReader: UIViewRepresentable {
         let view = PDFView()
         view.autoScales = true
         view.backgroundColor = UIColor(Theme.paper)
-        view.displayMode = singlePage ? .singlePage : .singlePageContinuous
+        view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
-        view.document = PDFDocument(data: data)
+        let document = PDFDocument(data: data)
+        if let document, PDFMargins.trim(document) { view.displayBox = .cropBox }
+        view.document = document
         model.pdfPageCount = view.document?.pageCount ?? 0
         if let page = view.document?.page(at: model.pdfPage) { view.go(to: page) }
         NotificationCenter.default.addObserver(context.coordinator, selector: #selector(Coordinator.pageChanged(_:)),
@@ -371,5 +373,74 @@ struct PDFReader: UIViewRepresentable {
                   let index = view.document?.index(for: page), index != model.pdfPage else { return }
             model.pdfPage = index
         }
+    }
+}
+
+/// Finds the printed area of a PDF's pages and crops every page to it.
+/// Workshop PDFs are laid out for paper, with a margin all round that costs a
+/// fifth of the width on a phone.
+enum PDFMargins {
+    /// Sets each page's crop box to the area that has ink on it, judged from a
+    /// sample of pages so every page gets the same crop and stays aligned.
+    /// Returns false (and changes nothing) when there's nothing worth trimming.
+    static func trim(_ document: PDFDocument) -> Bool {
+        let count = document.pageCount
+        guard count > 0 else { return false }
+        let samples = Set((0..<min(count, 8)).map { $0 * count / min(count, 8) })
+        var union: CGRect?
+        for index in samples {
+            guard let page = document.page(at: index) else { continue }
+            // The mapping below assumes unrotated pages.
+            guard page.rotation == 0 else { return false }
+            guard let ink = inkBounds(of: page) else { continue }
+            union = union?.union(ink) ?? ink
+        }
+        // Fractions of the page, origin at the top left. Pad a little, and
+        // don't bother for less than a few percent of gain.
+        guard var area = union?.insetBy(dx: -0.015, dy: -0.015).intersection(CGRect(x: 0, y: 0, width: 1, height: 1)),
+              area.width < 0.95 || area.height < 0.95, area.width > 0.3, area.height > 0.3 else { return false }
+        area = area.standardized
+        for index in 0..<count {
+            guard let page = document.page(at: index) else { continue }
+            let media = page.bounds(for: .mediaBox)
+            // PDF space has its origin at the bottom left.
+            page.setBounds(CGRect(x: media.minX + area.minX * media.width,
+                                  y: media.minY + (1 - area.maxY) * media.height,
+                                  width: area.width * media.width,
+                                  height: area.height * media.height), for: .cropBox)
+        }
+        return true
+    }
+
+    /// The bounding box of everything that isn't near-white, as fractions of
+    /// the page (origin top left), from a small rendering of it.
+    private static func inkBounds(of page: PDFPage) -> CGRect? {
+        let media = page.bounds(for: .mediaBox)
+        guard media.width > 0, media.height > 0 else { return nil }
+        let width = 160, height = max(1, Int((160 * media.height / media.width).rounded()))
+        guard let image = page.thumbnail(of: CGSize(width: width, height: height), for: .mediaBox).cgImage,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.setFillColor(UIColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixels = context.data?.bindMemory(to: UInt8.self, capacity: width * height * 4) else { return nil }
+
+        var minX = width, maxX = -1, minY = height, maxY = -1
+        for y in 0..<height {
+            for x in 0..<width {
+                let p = (y * width + x) * 4
+                if pixels[p] < 235 || pixels[p + 1] < 235 || pixels[p + 2] < 235 {
+                    minX = min(minX, x); maxX = max(maxX, x)
+                    minY = min(minY, y); maxY = max(maxY, y)
+                }
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return nil }
+        // The bitmap's first row is the top of the page.
+        return CGRect(x: CGFloat(minX) / CGFloat(width), y: CGFloat(minY) / CGFloat(height),
+                      width: CGFloat(maxX - minX + 1) / CGFloat(width),
+                      height: CGFloat(maxY - minY + 1) / CGFloat(height))
     }
 }

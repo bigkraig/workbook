@@ -53,7 +53,7 @@ struct WorkbenchView: View {
     @ViewBuilder
     private func stage(_ model: DocumentModel) -> some View {
         if case .loaded(let document) = model.state, document.isPDF, let data = model.pdfData {
-            PDFReader(data: data, model: model, singlePage: true)
+            PDFReader(data: data, model: model)
         } else if let figure = override ?? currentStep(model)?.figure {
             FigureStage(figure: figure).id(figure.id)
         } else {

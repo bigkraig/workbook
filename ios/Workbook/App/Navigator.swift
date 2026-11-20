@@ -103,6 +103,9 @@ final class Navigator {
     /// Open a document from a list: replaces whatever the detail side showed.
     func open(_ document: DocumentSummary) {
         detail = [.document(document)]
+        // Once something is open, reading it is the point: give it the whole
+        // inner screen. The browser is one tap away in the document's toolbar.
+        focused = true
         remember(document)
     }
 
