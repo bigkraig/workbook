@@ -132,3 +132,25 @@
 /*.footer-top-padding {*/
 /*  padding-top: 20px !important*/
 /*}*/
+
+/* A table that isn't page-wide is as wide as its content, with its headers
+   over their columns. */
+table.table-compact[_content-table] {
+  width: auto;
+  max-width: 100%;
+}
+
+table.table-compact[_content-table] th, table.table-compact[_content-table] td {
+  text-align: left;
+  vertical-align: top;
+  padding: 3px 28px 3px 0;
+}
+
+table.table-compact[_content-table] th {
+  border-bottom: 1px solid #c9c5ba;
+}
+
+/* Leave room for the fixed title bar when a link jumps to a step or a heading. */
+.document-container [id] {
+  scroll-margin-top: 72px;
+}

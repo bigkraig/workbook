@@ -32,6 +32,8 @@ final class DocumentModel {
     var currentStep = 0
     /// Top-level block at the top of the reading view.
     var topBlock: Int? = 0
+    /// Where to open the document (an anchor id), when a link named a place in it.
+    private var pendingAnchor: String?
     var pdfData: Data?
     var pdfPage = 0
     var pdfPageCount = 0
@@ -54,6 +56,12 @@ final class DocumentModel {
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    /// Open at an anchor: now if the document is loaded, else once it is.
+    func go(to anchor: String?) {
+        guard let anchor, !anchor.isEmpty else { return }
+        if let block = anchors[anchor] { topBlock = block } else { pendingAnchor = anchor }
     }
 
     /// The step containing a top-level block (for handing the reading position
@@ -119,6 +127,8 @@ final class DocumentModel {
         self.steps = steps
         self.anchors = anchors
         self.blockFigures = figures
+        if let anchor = pendingAnchor, let block = anchors[anchor] { topBlock = block }
+        pendingAnchor = nil
         currentStep = min(currentStep, max(0, steps.count - 1))
     }
 

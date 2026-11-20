@@ -29,9 +29,12 @@ enum InlineHTML {
     /// A link to another document, written the way the website routes it
     /// (`/documents/<year>/<vehicle>/<id>`), as the app's deep link.
     static func documentURL(_ href: String) -> URL? {
-        let parts = href.split(separator: "/")
+        // An optional #fragment names a place in that document (a tool's entry).
+        let pieces = href.split(separator: "#", maxSplits: 1)
+        let parts = (pieces.first ?? "").split(separator: "/")
         guard href.hasPrefix("/documents/"), parts.count == 4 else { return nil }
-        return URL(string: "workbook://vehicle/\(parts[1])/\(parts[2])/document/\(parts[3])")
+        let fragment = pieces.count > 1 ? "#\(pieces[1])" : ""
+        return URL(string: "workbook://vehicle/\(parts[1])/\(parts[2])/document/\(parts[3])\(fragment)")
     }
 
     /// A fragment that is exactly one `<hN>` element.

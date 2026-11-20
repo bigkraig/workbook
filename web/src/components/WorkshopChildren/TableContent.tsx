@@ -210,7 +210,7 @@ export function TableContent({
 
   return <div _content-table="">
     {title && <h3 _content-table="">{title}</h3>}
-    <table _content-table="" className={"table table-responsive"}>
+    <table _content-table="" className={pgwide === false ? "table table-responsive table-compact" : "table table-responsive"}>
       <thead _content-table="">
       {headerRows && headerRows}
       </thead>

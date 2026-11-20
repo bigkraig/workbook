@@ -105,6 +105,7 @@ class Converter:
         self.figure_ids = 0
         self.dead_links = 0
         self.toc: list[dict] = []
+        self.tool_links: set[tuple[str, str]] = set()
 
     # ---- inline text -----------------------------------------------------
 
@@ -147,7 +148,15 @@ class Converter:
         code = f"{ref.group(1)}-{ref.group(2)}" if ref else None
         if code and code in self.codes:
             self.references[code] = html.unescape(label)
-            return f'<a class="qv qv-doc" href="/documents/{self.year}/{self.model}/{hkap_id(self.model, self.year, code)}">{inner.strip()}</a>'
+            # A tool link names the tool ("...-SpecialTools-...-AV8174"); aim at its
+            # entry in the tools list (anchored there by link_tools).
+            tool = re.search(r"SpecialTools.*-([A-Z]{1,3}\d\w*)$", uri)
+            fragment = ""
+            if tool:
+                fragment = f"#tool-{tool.group(1)}"
+                self.tool_links.add((code, tool.group(1)))
+            return (f'<a class="qv qv-doc" href="/documents/{self.year}/{self.model}/'
+                    f'{hkap_id(self.model, self.year, code)}{fragment}">{inner.strip()}</a>')
         self.flags[f"link kept as text: {uri[:90]}"] += 1
         self.dead_links += 1
         return inner
@@ -399,7 +408,9 @@ class Converter:
                 data.append(cells)
                 self.counts["table_rows"] += 1
         self.in_table = was
-        inputs = {"data": data}
+        # Not page-wide: a small table (a torque value, say) stays as wide as its
+        # content instead of stretching its columns across the page.
+        inputs = {"data": data, "pgwide": False}
         if header:
             inputs["header"] = header
         if title:
@@ -676,6 +687,7 @@ def convert(path: str, out_dir: str, year: int, model: str, codes: set[str]) -> 
         "counts": dict(converter.counts),
         "flags": dict(converter.flags),
         "references": len(document["references"]),
+        "tool_links": sorted(converter.tool_links),
     })
     os.makedirs(os.path.join(out_dir, "media"), exist_ok=True)
     images = {}
@@ -711,6 +723,64 @@ def convert(path: str, out_dir: str, year: int, model: str, codes: set[str]) -> 
     return report
 
 
+def link_tools(out_dir: str, reports: list[dict]) -> tuple[int, int]:
+    """Anchor each tool that some document links to at its entry in the tools
+    list it lives in, so the link lands on the tool rather than the top of the
+    list. The entry is the first step (or block) that names the tool."""
+    wanted: dict[str, set[str]] = collections.defaultdict(set)
+    for report in reports:
+        for code, tool in report.get("tool_links", []):
+            wanted[code].add(tool)
+    by_code = {r["file"][:-4].split(" ")[0]: r["output"] for r in reports if r.get("output")}
+    found = missing = 0
+    for code, tools in wanted.items():
+        if code not in by_code:
+            missing += len(tools)
+            continue
+        path = os.path.join(out_dir, by_code[code])
+        document = json.load(open(path))
+
+        def text_of(value) -> str:
+            parts: list[str] = []
+            output_text(value, parts)
+            return squeeze("".join(parts))
+
+        for tool in sorted(tools):
+            anchor = f"tool-{tool}"
+            placed = False
+            for index, block in enumerate(document["content"]):
+                if block["type"] == "plot":
+                    for item in block["inputs"]:
+                        if tool in text_of(item["children"]) and not item.get("id"):
+                            item["id"] = anchor
+                            placed = True
+                            break
+                elif block["type"] != "anchor" and tool in text_of(block):
+                    document["content"].insert(index, {"type": "anchor", "inputs": {"id": anchor}})
+                    placed = True
+                if placed:
+                    break
+            found += placed
+            missing += not placed
+        # The app scrolls to top-level blocks, so an anchored step starts its own.
+        content = []
+        for block in document["content"]:
+            if block["type"] != "plot":
+                content.append(block)
+                continue
+            run: list[dict] = []
+            for item in block["inputs"]:
+                if run and str(item.get("id") or "").startswith("tool-"):
+                    content.append({"type": "plot", "inputs": run})
+                    run = []
+                run.append(item)
+            content.append({"type": "plot", "inputs": run})
+        document["content"] = content
+        with open(path, "w") as handle:
+            json.dump(document, handle, indent=1, ensure_ascii=False)
+    return found, missing
+
+
 def _worker(args):
     path = args[0]
     try:
@@ -741,7 +811,7 @@ if __name__ == "__main__":
         reports = pool.map(_worker, [(p, args.out, args.year, args.model, codes) for p in paths])
     with open(os.path.join(args.out, "report.json"), "w") as handle:
         json.dump(reports, handle, indent=1, ensure_ascii=False)
-    ids: dict[str, str] = {}
+    anchored, unanchored = link_tools(args.out, reports)
     for r in reports:
         if "error" in r:
             print(f"pdf   {r['file'][:60]:60} {r['error']}")
@@ -752,4 +822,5 @@ if __name__ == "__main__":
     passed = sum(1 for r in reports if r["passed"])
     dead = sum(v for r in reports for k, v in r.get("flags", {}).items() if k.startswith("link kept as text"))
     print(f"{passed} of {len(reports)} documents structured; {len(reports) - passed} stay PDF; "
-          f"{dead} links to documents outside the set kept as text")
+          f"{dead} links to documents outside the set kept as text; "
+          f"{anchored} tools anchored in their lists, {unanchored} not found there")

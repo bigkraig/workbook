@@ -114,8 +114,10 @@ struct DocumentScreen: View {
                 // A cross-reference to another document: open it on top of this one.
                 let parts = url.pathComponents.filter { $0 != "/" }
                 guard parts.count >= 4, parts[2] == "document" else { return .systemAction }
-                navigator.push(.document(DocumentSummary(hkapId: parts[3], title: "", documentType: "", fileFormat: "xml",
-                                                         vehicleComponent: nil, componentIndex: nil)))
+                let target = DocumentSummary(hkapId: parts[3], title: "", documentType: "", fileFormat: "xml",
+                                             vehicleComponent: nil, componentIndex: nil)
+                navigator.model(for: target).go(to: url.fragment)
+                navigator.push(.document(target))
                 return .handled
             }
             open(anchor: String(url.path.dropFirst()), document, model)
