@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from "react";
-import {GetMediaImageUrl, GetWorkshopLiterature, IWorkshopLiterature} from "@/lib/api";
+import {GetWorkshopLiterature, IWorkshopLiterature} from "@/lib/api";
 import {ToolsTable} from "@/app/ui/ToolsTable";
 import {TechnicalValuesTable} from "@/app/ui/TechnicalValuesTable";
 import {WorkshopChildren} from "@/components/WorkshopChildren";
@@ -62,14 +62,6 @@ export function WorkshopLiterature({hkap_id, translations}: { hkap_id: string, t
     {
       workshopLiterature.fileFormat == FileFormat.XML &&
         <WorkshopChildren obj={workshopLiterature.content} translations={translations}/>
-    }
-    {
-      // A document converted from a PDF keeps the PDF as its original.
-      workshopLiterature.fileFormat == FileFormat.XML && workshopLiterature.mediaCloudFileId &&
-        <div className={clsx("mt-6 mb-2 px-2 text-sm")}>
-          <a className={clsx("underline text-muted")} target="_blank" rel="noreferrer"
-             href={GetMediaImageUrl(workshopLiterature.mediaCloudFileId)}>Original PDF</a>
-        </div>
     }
     {
       workshopLiterature.fileFormat == FileFormat.PDF &&

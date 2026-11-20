@@ -2,10 +2,10 @@
 
 import {usePathname} from "next/navigation";
 import React, {useEffect, useState} from "react";
-import {ArrowBack} from "@mui/icons-material";
+import {ArrowBack, PictureAsPdf} from "@mui/icons-material";
 import {SideBarIndex} from "@/components/SideBarIndex";
 import clsx from "clsx";
-import {GetTranslations, GetWorkshopLiterature, IWorkshopLiterature} from "@/lib/api";
+import {GetMediaImageUrl, GetTranslations, GetWorkshopLiterature, IWorkshopLiterature} from "@/lib/api";
 import {WorkshopLiterature} from "@/components/WorkshopLiterature";
 import {DocumentContext} from "@/lib";
 
@@ -99,6 +99,16 @@ export default function Home() {
             <span className={clsx("shrink-0 font-mono text-[13px] text-brass-dim")}>{workshopLiterature.kdnr}</span>
           )}
           <span className={clsx("truncate text-[15px] font-medium text-ink")}>{workshopLiterature.title}</span>
+          {/* A document converted from a PDF keeps the PDF as its original; the bar is always in reach. */}
+          {String(workshopLiterature.fileFormat).toLowerCase() == "xml" && workshopLiterature.mediaCloudFileId && (
+            <a href={GetMediaImageUrl(workshopLiterature.mediaCloudFileId)} target="_blank" rel="noreferrer"
+               title="Open the original PDF"
+               className={clsx("ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-line px-2.5 py-1.5",
+                               "text-[13px] font-medium text-ink transition-colors hover:border-brass hover:text-brass-dim")}>
+              <PictureAsPdf fontSize="small"/>
+              <span className={clsx("hidden sm:inline")}>Original PDF</span>
+            </a>
+          )}
         </header>
 
         <div className={clsx("grid grid-cols-6")}>
