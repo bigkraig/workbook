@@ -22,5 +22,9 @@ xcodebuild -project Workbook.xcodeproj -scheme Workbook -configuration Release \
 echo "Uploading to App Store Connect…"
 xcodebuild -exportArchive -archivePath "$out/Workbook.xcarchive" \
   -exportOptionsPlist "$here/ExportOptions-TestFlight.plist" -exportPath "$out/export" -allowProvisioningUpdates \
-  | grep -E 'EXPORT|error|is complete' || true
+  2>&1 | tee "$out/export.log" | grep -E 'EXPORT|error|is complete' || true
+if ! grep -q 'EXPORT SUCCEEDED' "$out/export.log"; then
+  echo "Upload FAILED for build ${build}; see $out/export.log" >&2
+  exit 1
+fi
 echo "Uploaded build ${build}. It appears in TestFlight once App Store Connect finishes processing (a few minutes)."
