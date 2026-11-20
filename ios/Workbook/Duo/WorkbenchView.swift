@@ -101,7 +101,11 @@ struct WorkbenchView: View {
                                     .font(.system(size: 30, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Theme.brass)
                             }
-                            ContentView(nodes: step.nodes)
+                            // The step's own photo is already up on the stage.
+                            ContentView(nodes: step.nodes.filter { node in
+                                if case .image(let figure) = node { return figure.id != step.figure?.id }
+                                return true
+                            })
                         }
                         .padding(.horizontal, 18)
                         .padding(.vertical, 12)

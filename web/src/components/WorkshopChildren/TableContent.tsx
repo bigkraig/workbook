@@ -173,8 +173,15 @@ export function TableContent({
       let row: React.JSX.Element[] = [];
       if (Array.isArray(headerRow)) {
         headerRow.map((headerCell, index) => {
-          row.push(<th _content-table="" key={index}><WorkshopChildren translations={translations} obj={headerCell}/>
-          </th>);
+          // A spanning cell is [content, colspan, rowspan], as in the body.
+          if (Array.isArray(headerCell) && headerCell.length == 3 && typeof headerCell[1] === "number") {
+            row.push(<th _content-table="" key={index} colSpan={headerCell[1] as number} rowSpan={headerCell[2] as number}>
+              <WorkshopChildren obj={headerCell[0]} translations={translations}/>
+            </th>);
+          } else {
+            row.push(<th _content-table="" key={index}><WorkshopChildren translations={translations} obj={headerCell}/>
+            </th>);
+          }
         });
       }
       headerRows.push(<tr _content-table="" key={index}>{row}</tr>);

@@ -7,9 +7,11 @@ use anyhow::{bail, Result};
 use lopdf::{Document as PdfDocument, Object, ObjectId};
 use rayon::prelude::*;
 use regex::Regex;
+use serde_derive::Deserialize;
 use serde_json::json;
+use std::collections::HashMap;
 use pcss::api_types::Response;
-use pcss::workshop_literature::{DocumentType, FileFormat, LanguageCode, WorkshopLiterature};
+use pcss::workshop_literature::{Children, DocumentType, FileFormat, LanguageCode, Toc, WorkshopLiterature};
 use crate::content_store::ContentStore;
 use crate::models::{Document, TreeNode, Vehicle};
 use crate::settings::Settings;
@@ -34,6 +36,32 @@ struct PreparedFerrari {
     document: Document,
     doc_node_id: i32,
     hkap_id: String,
+    /// Set when the document was loaded in structured form.
+    structured: Option<StructuredExtras>,
+}
+
+/// What a structured document brings besides its content tree.
+struct StructuredExtras {
+    /// Figures, as (workshop image id, bytes).
+    images: Vec<(i32, Vec<u8>)>,
+    /// Search text.
+    text: String,
+}
+
+/// A document converted from its PDF by `tools/ferrari_extract.py`: the same
+/// content tree the Porsche documents have. Only documents whose conversion
+/// passed its checks against the PDF (`passed`) are loaded this way.
+#[derive(Deserialize)]
+struct StructuredDocument {
+    passed: bool,
+    content: Children,
+    /// Headings, for the contents menu.
+    toc: Vec<Toc>,
+    /// Workshop image id -> file, relative to the structured directory.
+    images: HashMap<String, String>,
+    text: String,
+    /// "Latest Update" date printed on the document (YYYY-MM-DD).
+    updated: Option<String>,
 }
 
 
@@ -55,6 +83,12 @@ pub struct LoadFerrariArgs {
     /// Vehicle model code (e.g., F151M)
     #[arg(short = 'm', long)]
     pub model: String,
+
+    /// Directory written by tools/ferrari_extract.py. Documents converted there
+    /// (and that passed its checks) load as structured documents, with the PDF
+    /// kept as the original; the rest load as PDFs.
+    #[arg(short = 's', long)]
+    pub structured: Option<String>,
 }
 
 pub struct FerrariLoader {
@@ -137,17 +171,35 @@ impl FerrariLoader {
         // (lopdf parsing/link-rewriting is the CPU bottleneck).
         let prepared: Vec<PreparedFerrari> = work
             .par_iter()
-            .map(|w| self.prepare_pdf(w))
+            .map(|w| self.prepare_pdf(w, args.structured.as_deref().map(Path::new)))
             .collect::<Result<Vec<_>>>()?;
+        let structured = prepared.iter().filter(|p| p.structured.is_some()).count();
+        println!("  {} structured, {} PDF only", structured, prepared.len() - structured);
 
         // Phase 3: document rows + links sequentially, media bytes concurrently.
         for p in &prepared {
             self.content_store.upsert_document_direct(&p.document)?;
             self.content_store.link_document_to_node(p.doc_node_id, &p.hkap_id)?;
         }
-        let media: Vec<(String, Vec<u8>)> =
-            prepared.into_iter().map(|p| (p.media_id, p.content)).collect();
+        let mut media: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut texts: Vec<(String, String)> = Vec::new();
+        let large = "large".to_string();
+        let mut figures = std::collections::HashSet::new();
+        for p in prepared {
+            if let Some(extras) = p.structured {
+                for (id, bytes) in &extras.images {
+                    // The same photo is reused across documents.
+                    if figures.insert(*id) {
+                        self.content_store.upsert_workshop_image(*id, &large, bytes)?;
+                    }
+                }
+                texts.push((p.hkap_id.clone(), extras.text));
+            }
+            media.push((p.media_id, p.content));
+        }
         self.content_store.upsert_media_images(media)?;
+        self.content_store.upsert_document_texts(texts)?;
+        println!("  {} figures", figures.len());
 
         println!("Ferrari document loading complete in {:.1}s", start.elapsed().as_secs_f64());
         Ok(())
@@ -255,7 +307,17 @@ impl FerrariLoader {
 
     /// Read a queued PDF, rewrite its links, and build the document payload. Pure
     /// (no DB access) so it can run on the rayon pool across all cores.
-    fn prepare_pdf(&self, w: &PdfWork) -> Result<PreparedFerrari> {
+    fn prepare_pdf(&self, w: &PdfWork, structured_dir: Option<&Path>) -> Result<PreparedFerrari> {
+        let structured = structured_dir.and_then(|dir| self.read_structured(dir, w));
+        let publication_date = structured.as_ref()
+            .and_then(|(doc, _)| doc.updated.as_ref())
+            .map(|date| format!("{}T00:00:00.000+00:00", date))
+            .unwrap_or_else(|| "2026-01-28T16:35:14.636+02:00".to_string());
+        let (content_tree, toc, extras) = match structured {
+            Some((doc, images)) => (Some(doc.content), Some(doc.toc), Some(StructuredExtras { images, text: doc.text })),
+            None => (None, None, None),
+        };
+
         let raw_content = fs::read(&w.pdf_path)?;
         let content = self.update_links(&raw_content, w.year, &w.model)
             .unwrap_or_else(|e| {
@@ -265,7 +327,7 @@ impl FerrariLoader {
 
         let workshop_literature = Response {
             payload: WorkshopLiterature {
-                file_format: FileFormat::Pdf,
+                file_format: if content_tree.is_some() { FileFormat::Xml } else { FileFormat::Pdf },
                 language_code: LanguageCode::EnUs,
                 hkap_id: w.hkap_id.clone(),
                 variant_id: 1,
@@ -275,14 +337,14 @@ impl FerrariLoader {
                 source_system: None,
                 kdnr: w.vehicle_component.clone(),
                 ti_number: None,
-                publication_date: "2026-01-28T16:35:14.636+02:00".to_string(),
+                publication_date,
                 modification_date: 0,
                 title: w.title.clone(),
                 file_name: w.file_name.clone(),
                 document_type: DocumentType::Mr,
                 target_hkap_id: None,
-                content: None,
-                toc: None,
+                content: content_tree,
+                toc,
                 techvalues: None,
                 mediacloud_image_ids: None,
                 tools: None,
@@ -307,7 +369,7 @@ impl FerrariLoader {
             title: w.title.clone(),
             document_type: "MR".to_string(),
             publication_date: workshop_literature.payload.publication_date.to_string(),
-            file_format: "pdf".to_string(),
+            file_format: if extras.is_some() { "xml" } else { "pdf" }.to_string(),
             vehicle_component_with_document_index: w.vehicle_component.clone(),
             new: false,
             bookmarked: false,
@@ -320,7 +382,38 @@ impl FerrariLoader {
             document,
             doc_node_id: w.doc_node_id,
             hkap_id: w.hkap_id.clone(),
+            structured: extras,
         })
+    }
+
+    /// The structured form of a PDF, if it was converted and passed its checks.
+    /// Anything wrong with it (unreadable, a shape the document types reject, a
+    /// missing figure) falls back to the PDF with a warning.
+    fn read_structured(&self, dir: &Path, w: &PdfWork) -> Option<(StructuredDocument, Vec<(i32, Vec<u8>)>)> {
+        let path = dir.join(format!("{}.json", w.file_name.trim_end_matches(".pdf")));
+        let raw = fs::read(&path).ok()?;
+        let doc: StructuredDocument = match serde_json::from_slice(&raw) {
+            Ok(doc) => doc,
+            Err(e) => {
+                eprintln!("Warning: {} is not a valid structured document ({}); loading the PDF", path.display(), e);
+                return None;
+            }
+        };
+        if !doc.passed {
+            return None;
+        }
+        let mut images = Vec::with_capacity(doc.images.len());
+        for (key, file) in &doc.images {
+            let loaded = key.parse::<i32>().ok().zip(fs::read(dir.join(file)).ok());
+            match loaded {
+                Some((id, bytes)) => images.push((id, bytes)),
+                None => {
+                    eprintln!("Warning: {} is missing figure {}; loading the PDF", path.display(), file);
+                    return None;
+                }
+            }
+        }
+        Some((doc, images))
     }
 
     fn stable_uuid(&self, model: &str, year: i32, key: &str) -> Uuid {

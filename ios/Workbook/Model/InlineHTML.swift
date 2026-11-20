@@ -26,6 +26,14 @@ enum InlineHTML {
         return components.url
     }
 
+    /// A link to another document, written the way the website routes it
+    /// (`/documents/<year>/<vehicle>/<id>`), as the app's deep link.
+    static func documentURL(_ href: String) -> URL? {
+        let parts = href.split(separator: "/")
+        guard href.hasPrefix("/documents/"), parts.count == 4 else { return nil }
+        return URL(string: "workbook://vehicle/\(parts[1])/\(parts[2])/document/\(parts[3])")
+    }
+
     /// A fragment that is exactly one `<hN>` element.
     static func heading(_ html: String) -> Heading? {
         let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -100,6 +108,8 @@ enum InlineHTML {
                     link = nil
                 } else if let target = attribute("target", in: String(tag)), !target.isEmpty {
                     link = anchorURL(target)
+                } else if let href = attribute("href", in: String(tag)) {
+                    link = documentURL(href)
                 }
             default: break
             }

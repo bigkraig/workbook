@@ -26,6 +26,7 @@ struct DocumentScreen: View {
     @State private var sheet: Sheet?
     @State private var viewer: Figure?
     @State private var workbench = false
+    @State private var original = false
     @State private var pendingReference: NestedRef?
 
     private enum Sheet: String, Identifiable {
@@ -67,6 +68,9 @@ struct DocumentScreen: View {
         .fullScreenCover(isPresented: $workbench) {
             WorkbenchView(summary: summary) { workbench = false }
         }
+        .sheet(isPresented: $original) {
+            if let media = model.state.value?.mediaFileId { OriginalPDF(mediaId: media, model: model) }
+        }
         .crossReferences($pendingReference)
     }
 
@@ -106,6 +110,14 @@ struct DocumentScreen: View {
         .environment(\.documentActions, actions(document, model))
         .environment(\.openURL, OpenURLAction { url in
             guard url.scheme == "workbook" else { return .systemAction }
+            if url.host() == "vehicle" {
+                // A cross-reference to another document: open it on top of this one.
+                let parts = url.pathComponents.filter { $0 != "/" }
+                guard parts.count >= 4, parts[2] == "document" else { return .systemAction }
+                navigator.push(.document(DocumentSummary(hkapId: parts[3], title: "", documentType: "", fileFormat: "xml",
+                                                         vehicleComponent: nil, componentIndex: nil)))
+                return .handled
+            }
             open(anchor: String(url.path.dropFirst()), document, model)
             return .handled
         })
@@ -254,6 +266,12 @@ struct DocumentScreen: View {
                 Button { workbench = true } label: { Label("Step by step", systemImage: "list.number") }
                     .disabled(model.steps.isEmpty)
             }
+            if document.mediaFileId != nil {
+                // Converted from a PDF, which is kept as the original.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { original = true } label: { Label("Original PDF", systemImage: "doc.richtext") }
+                }
+            }
             if !document.toc.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -336,6 +354,39 @@ struct FigureViewer: View {
 /// A PDF document (bulletins, scanned manuals), scrolling vertically at the
 /// full width of its pane, with the pages' blank margins trimmed so the text
 /// is as large as the screen allows. Follows `model.pdfPage`.
+/// The PDF a structured document was converted from.
+private struct OriginalPDF: View {
+    @Environment(AppSettings.self) private var settings
+    @Environment(\.dismiss) private var dismiss
+    let mediaId: String
+    let model: DocumentModel
+    @State private var data: Loadable<Data> = .loading
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch data {
+                case .loading: ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .failed(let message):
+                    StatusView(systemImage: "exclamationmark.triangle", title: "Couldn't load the PDF", message: message)
+                case .loaded(let data): PDFReader(data: data, model: model)
+                }
+            }
+            .background(Theme.paper)
+            .navigationTitle("Original PDF")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+        }
+        .task {
+            let api = API(settings: settings)
+            do { data = .loaded(try await MediaStore.shared.load(api.mediaPath(mediaId), api: api).data) }
+            catch { data = .failed(error.localizedDescription) }
+        }
+    }
+}
+
 struct PDFReader: UIViewRepresentable {
     let data: Data
     let model: DocumentModel

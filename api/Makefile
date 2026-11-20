@@ -48,8 +48,15 @@ FERRARI_PATH  ?= source_files/ferrari/2017-F151M
 FERRARI_YEAR  ?= 2017
 FERRARI_MODEL ?= F151M
 
+FERRARI_STRUCTURED ?= generated/ferrari/$(FERRARI_YEAR)-$(FERRARI_MODEL)
+
+# tools/ferrari_extract.py converts the tagged PDFs into structured documents and
+# checks each against its PDF; the loader takes the ones that passed and loads the
+# rest as PDFs. Needs python3 + pdfminer.six and poppler's pdftotext on PATH.
 load-ferrari:
-	cargo run -- load-ferrari --path $(FERRARI_PATH) --year $(FERRARI_YEAR) --model $(FERRARI_MODEL)
+	python3 -c "import pdfminer" 2>/dev/null || python3 -m pip install -q -r tools/requirements.txt
+	python3 tools/ferrari_extract.py --year $(FERRARI_YEAR) --model $(FERRARI_MODEL) $(FERRARI_PATH) $(FERRARI_STRUCTURED)
+	cargo run -- load-ferrari --path $(FERRARI_PATH) --year $(FERRARI_YEAR) --model $(FERRARI_MODEL) --structured $(FERRARI_STRUCTURED)
 
 # The split step (tools/r8_split.py) needs python3 + pypdf on PATH. If pypdf is already
 # available (e.g. a nixpkgs python built with it), use it as-is; otherwise pip-install it.

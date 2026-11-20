@@ -357,6 +357,7 @@ private struct WarningBlock: View {
         case "0Hinweis": return ("NOTICE", Color(red: 0.69, green: 0.69, blue: 0.70), "info.circle", true)
         case "1Vorsicht": return ("CAUTION", Color(red: 1, green: 0.82, blue: 0.2), "exclamationmark.triangle.fill", true)
         case "2Warnung": return ("WARNING", Color(red: 0.96, green: 0.55, blue: 0.1), "exclamationmark.triangle.fill", true)
+        case "environment": return ("ENVIRONMENT", Color(red: 0.42, green: 0.72, blue: 0.47), "leaf.fill", true)
         case "3Gefahr": return ("DANGER", Color(red: 0.84, green: 0, blue: 0.11), "exclamationmark.triangle.fill", false)
         default: return ("INFORMATION", Color(red: 0.69, green: 0.69, blue: 0.70), "info.circle", true)
         }

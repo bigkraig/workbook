@@ -49,6 +49,13 @@ export function WarningContent({
         <span _content-warning="">DANGER</span>
       </div>
     </div>
+  } else if (category == "environment") { // Ferrari: environmental safety
+    header = <div _content-warning="" className="cat0 warning-heading">
+      <div _content-warning="" className="background-cat0 warning-sign">
+        <InfoOutlined _content-warning="" className={clsx("text-4xl")}/>
+        <span _content-warning="">ENVIRONMENT</span>
+      </div>
+    </div>
   } else if (category == "Information") {
     header = <div _content-warning="" className="cat-info warning-heading">
       <div _content-warning="">
