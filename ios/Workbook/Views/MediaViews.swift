@@ -9,6 +9,9 @@ struct RemoteImage: View {
     let path: String
     /// Pinch-zoom and pan (SVG only); off for inline figures so the page scrolls.
     var zoomable = false
+    /// Crop away transparent margins, so pictures with different amounts of
+    /// empty space around them (the cars) come out the same size.
+    var trimmed = false
     @State private var media: Loadable<Media> = .loading
 
     enum Media {
@@ -40,7 +43,7 @@ struct RemoteImage: View {
         do {
             let (data, contentType) = try await MediaStore.shared.load(path, api: API(settings: settings))
             if !contentType.contains("svg"), let image = UIImage(data: data) {
-                media = .loaded(.raster(image))
+                media = .loaded(.raster(trimmed ? image.trimmingTransparentEdges() : image))
             } else if let svg = String(data: data, encoding: .utf8), svg.contains("<svg") {
                 media = .loaded(.svg(svg, aspect: Self.aspect(of: svg)))
             } else {
@@ -144,5 +147,36 @@ struct FigureStage: View {
         }
         .padding(.vertical, 8)
         .background(Color.white)
+    }
+}
+
+extension UIImage {
+    /// The image cropped to its non-transparent pixels. Returns the image
+    /// unchanged if it has no transparency to trim.
+    func trimmingTransparentEdges() -> UIImage {
+        guard let source = cgImage else { return self }
+        // Find the bounds on a small copy; the alpha channel is all that matters.
+        let scale = min(1, 320 / CGFloat(max(source.width, source.height)))
+        let width = max(1, Int(CGFloat(source.width) * scale)), height = max(1, Int(CGFloat(source.height) * scale))
+        var alpha = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(data: &alpha, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue) else { return self }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var minX = width, maxX = -1, minY = height, maxY = -1
+        for y in 0..<height {
+            for x in 0..<width where alpha[y * width + x] > 12 {
+                minX = min(minX, x); maxX = max(maxX, x)
+                minY = min(minY, y); maxY = max(maxY, y)
+            }
+        }
+        guard maxX >= minX, maxY >= minY else { return self }
+        // Back to full size, with a pixel of slack for the rounding.
+        let crop = CGRect(x: CGFloat(minX - 1) / scale, y: CGFloat(minY - 1) / scale,
+                          width: CGFloat(maxX - minX + 3) / scale, height: CGFloat(maxY - minY + 3) / scale)
+            .intersection(CGRect(x: 0, y: 0, width: source.width, height: source.height)).integral
+        guard crop.width < CGFloat(source.width) - 2 || crop.height < CGFloat(source.height) - 2,
+              let cropped = source.cropping(to: crop) else { return self }
+        return UIImage(cgImage: cropped, scale: self.scale, orientation: imageOrientation)
     }
 }

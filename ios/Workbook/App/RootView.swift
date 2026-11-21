@@ -160,7 +160,7 @@ private struct DetailPlaceholder: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                RemoteImage(path: API(settings: settings).vehicleImagePath(vehicle))
+                RemoteImage(path: API(settings: settings).vehicleImagePath(vehicle), trimmed: true)
                     .frame(maxWidth: 300, maxHeight: 150)
                     .padding(.top, 28)
                 Text(vehicle.name).font(.title2.weight(.bold)).foregroundStyle(Theme.text)

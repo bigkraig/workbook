@@ -159,7 +159,7 @@ private struct VehicleCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            RemoteImage(path: API(settings: settings).vehicleImagePath(vehicle))
+            RemoteImage(path: API(settings: settings).vehicleImagePath(vehicle), trimmed: true)
                 .frame(maxWidth: .infinity)
                 .frame(height: 66)
                 .padding(.horizontal, 14)
@@ -224,7 +224,7 @@ private struct LatestCard: View {
                 .foregroundStyle(Theme.ink.opacity(0.7))
             }
             Spacer(minLength: 0)
-            RemoteImage(path: API(settings: settings).vehicleImagePath(recent.vehicle))
+            RemoteImage(path: API(settings: settings).vehicleImagePath(recent.vehicle), trimmed: true)
                 .frame(width: 84, height: 46)
             Image(systemName: "arrow.right").font(.headline).foregroundStyle(Theme.ink)
         }
