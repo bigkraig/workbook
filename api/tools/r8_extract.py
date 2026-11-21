@@ -1093,9 +1093,22 @@ def resolve_links(out_dir: str, reports: list[dict]) -> dict:
     numbered = {r["hkap_id"]: {m.group(0): dest for title, dest in r["named"]
                                if (m := re.match(r"\d+(?:\.\d+)*", title))} for r in good}
 
+    # There are no pages any more, so a link reads as what it opens: "⇒ page 247"
+    # becomes "⇒ 72.2.7 Connecting and disconnecting airbag adapter".
+    names = {p["hkap_id"]: f'{p["index"]} {p["title"]}'.strip() for r in good for p in r["parts"]}
+
+    def relabel(text: str, dest: str) -> str:
+        shown = re.sub(r"<[^>]+>", "", text)
+        if dest in names and re.fullmatch(r"\s*⇒\s*(?:“.*”,\s*)?page\s*\d+\s*", html.unescape(shown), re.S):
+            return "⇒ " + html.escape(names[dest], quote=False)
+        if dest in names:
+            # Other wordings ("⇒ Item 12 (page 26"): just the page gives way.
+            return re.sub(r"page\s*\d+", lambda _: html.escape(names[dest], quote=False), text)
+        return text
+
     def page_link(match: re.Match) -> str:
         hkap, page, frac = match.group(1), int(match.group(2)), float(match.group(3) or 0)
-        tail = f'">{match.group(4)}</a>'
+        text = match.group(4)
         known = targets.get(hkap)
         if not known:
             stats["left as page references"] += 1
@@ -1105,23 +1118,32 @@ def resolve_links(out_dir: str, reports: list[dict]) -> dict:
         quoted = re.search(r"“(\d+(?:\.\d+)*)\s", re.sub(r"<[^>]+>", "", match.group(4)))
         if quoted and quoted.group(1) in numbered.get(hkap, {}):
             stats["to the start of a document"] += 1
-            return f'href="/documents/{YEAR}/{MODEL}/{numbered[hkap][quoted.group(1)]}{tail}'
+            dest = numbered[hkap][quoted.group(1)]
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}">{relabel(text, dest)}</a>'
         # (headings can sit two lines apart, so the allowance is under a line)
         at_or_before = [a for a in known if (a[0], a[1]) <= (page, frac + 0.006)]
         target = at_or_before[-1] if at_or_before else known[0]
         dest = target[2]
         if target[0] == page and abs(target[1] - frac) < 0.006:
             stats["to the start of a document"] += 1
-            return f'href="/documents/{YEAR}/{MODEL}/{dest}{tail}'
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}">{relabel(text, dest)}</a>'
         # Somewhere inside the document: the last block printed at or above the spot.
         positions = parts[dest].get("positions") or []
         block = max((i for i, at in enumerate(positions) if at and (at[0], at[1]) <= (page, frac + 0.006)), default=None)
+        # The spot usually sits a little above the block it means (it marks the
+        # top of the space before a caption or paragraph), so a block that starts
+        # just below it is the target; failing that, the block the spot is inside.
+        below = min((i for i, at in enumerate(positions)
+                     if at and at[0] == page and frac + 0.006 < at[1] <= frac + 0.035), default=None)
+        exact = block is not None and positions[block][0] == page and frac - positions[block][1] <= 0.006
+        if below is not None and not exact:
+            block = below
         if not block:
             stats["to the start of a document"] += 1
-            return f'href="/documents/{YEAR}/{MODEL}/{dest}{tail}'
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}">{relabel(text, dest)}</a>'
         wanted[dest].add(block)
         stats["to a place inside a document"] += 1
-        return f'href="/documents/{YEAR}/{MODEL}/{dest}#ref-{block}{tail}'
+        return f'href="/documents/{YEAR}/{MODEL}/{dest}#ref-{block}">{relabel(text, dest)}</a>'
 
     def text_ref(source: str):
         def swap(match: re.Match) -> str:

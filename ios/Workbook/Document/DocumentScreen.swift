@@ -94,7 +94,8 @@ struct DocumentScreen: View {
 
     private func content(_ document: WorkshopDocument, _ model: DocumentModel) -> some View {
         @Bindable var model = model
-        return ScrollView {
+        return ScrollViewReader { proxy in
+        ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 titleBlock(document)
                 ForEach(Array(document.content.enumerated()), id: \.offset) { index, node in
@@ -108,6 +109,18 @@ struct DocumentScreen: View {
             .padding(.bottom, 40)
         }
         .scrollPosition(id: $model.topBlock, anchor: .top)
+        .task(id: model.landing) {
+            // A link landed here: the figures above are still arriving and
+            // pushing the target down, so aim at it again as they settle.
+            guard let block = model.landing else { return }
+            for delay in [0.15, 0.6, 1.4, 2.5] {
+                try? await Task.sleep(for: .seconds(delay))
+                if Task.isCancelled { return }
+                proxy.scrollTo(block, anchor: .top)
+            }
+            model.landing = nil
+        }
+        }
         .environment(\.documentActions, actions(document, model))
         .environment(\.openURL, OpenURLAction { url in
             guard url.scheme == "workbook" else { return .systemAction }

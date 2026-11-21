@@ -64,8 +64,12 @@ final class DocumentModel {
     /// Open at an anchor: now if the document is loaded, else once it is.
     func go(to anchor: String?) {
         guard let anchor, !anchor.isEmpty else { return }
-        if let block = anchors[anchor] { topBlock = block } else { pendingAnchor = anchor }
+        if let block = anchors[anchor] { topBlock = block; landing = block } else { pendingAnchor = anchor }
     }
+
+    /// A block a link asked to land on. The screen scrolls to it again as the
+    /// figures above it load and change the layout, then clears it.
+    var landing: Int?
 
     /// The step containing a top-level block (for handing the reading position
     /// to the workbench).
@@ -82,7 +86,13 @@ final class DocumentModel {
         var pinned: Set<String> = []
 
         for (block, node) in document.content.enumerated() {
-            for id in Self.anchorIDs(in: node) where anchors[id] == nil { anchors[id] = block }
+            // An anchor on its own marks the block after it (the anchor itself
+            // has nothing on screen to scroll to).
+            var target = block
+            if case .anchor = node {
+                target = document.content[block...].firstIndex { if case .anchor = $0 { return false } else { return true } } ?? block
+            }
+            for id in Self.anchorIDs(in: node) where anchors[id] == nil { anchors[id] = target }
 
             switch node {
             case .anchor:
@@ -134,7 +144,7 @@ final class DocumentModel {
         self.anchors = anchors
         self.blockFigures = figures
         self.pinnedFigureIDs = pinned
-        if let anchor = pendingAnchor, let block = anchors[anchor] { topBlock = block }
+        if let anchor = pendingAnchor, let block = anchors[anchor] { topBlock = block; landing = block }
         pendingAnchor = nil
         currentStep = min(currentStep, max(0, steps.count - 1))
     }
