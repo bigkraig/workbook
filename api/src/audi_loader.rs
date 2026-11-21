@@ -21,6 +21,12 @@ pub struct LoadAudiArgs {
     /// The split step runs automatically via tools/r8_split.py when manifest.json is absent.
     #[arg(short = 'p', long, default_value = "source_files/audi/2018-R8")]
     pub path: String,
+
+    /// Directory written by tools/r8_extract.py. Documents converted there (and
+    /// that passed its checks) load as structured documents, with the PDF kept as
+    /// the original; the rest load as PDFs. Every document is reloaded.
+    #[arg(short = 's', long)]
+    pub structured: Option<String>,
 }
 
 /// If `path` contains raw PDFs but no manifest.json, run r8_split.py to produce
@@ -157,7 +163,10 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
         node_id: i32,
         hkap_id: String,
         text: Option<String>,
+        /// Figures of a structured document, as (workshop image id, bytes).
+        images: Vec<(i32, Vec<u8>)>,
     }
+    let structured_dir = args.structured.as_deref().map(Path::new);
 
     // Phase 1 (sequential, cheap): write the leaf tree nodes + links for every
     // document, and collect the ones that still need their content processed.
@@ -176,7 +185,7 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
         store.upsert_tree_node_direct(&leaf)?;
         store.upsert_tree_node_links(d.parent_node_id, d.node_id)?;
 
-        if store.get_document(&d.hkap_id).is_ok() {
+        if structured_dir.is_none() && store.get_document(&d.hkap_id).is_ok() {
             skipped += 1;
         } else {
             to_process.push(d);
@@ -191,10 +200,15 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
         let pdf_path = base.join(&d.pdf);
         let content = fs::read(&pdf_path)
             .unwrap_or_else(|e| panic!("failed reading slice {}: {}", pdf_path.display(), e));
-        let text = crate::pdf_text::extract_pdf_text(&content).map(|t| t.trim().to_string());
+        let structured = structured_dir.and_then(|dir| crate::structured::read(dir, &d.hkap_id));
+        let (content_tree, toc, text, images) = match structured {
+            Some(s) => (Some(s.document.content), Some(s.document.toc), Some(s.document.text), s.images),
+            None => (None, None, crate::pdf_text::extract_pdf_text(&content).map(|t| t.trim().to_string()), Vec::new()),
+        };
+        let is_structured = content_tree.is_some();
         let worklit = Response {
             payload: WorkshopLiterature {
-                file_format: FileFormat::Pdf,
+                file_format: if is_structured { FileFormat::Xml } else { FileFormat::Pdf },
                 language_code: LanguageCode::EnUs,
                 hkap_id: d.hkap_id.clone(),
                 variant_id: 1,
@@ -210,8 +224,8 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
                 file_name: format!("{}.pdf", d.hkap_id),
                 document_type: DocumentType::Rm,
                 target_hkap_id: None,
-                content: None,
-                toc: None,
+                content: content_tree,
+                toc,
                 techvalues: None,
                 mediacloud_image_ids: None,
                 tools: None,
@@ -235,7 +249,7 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
             title: d.title.clone(),
             document_type: "RM".to_string(),
             publication_date: worklit.payload.publication_date.clone(),
-            file_format: "pdf".to_string(),
+            file_format: if is_structured { "xml" } else { "pdf" }.to_string(),
             vehicle_component_with_document_index: d.index().to_string(),
             new: false,
             bookmarked: false,
@@ -248,6 +262,7 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
             node_id: d.node_id,
             hkap_id: d.hkap_id.clone(),
             text,
+            images,
         }
     }).collect();
 
@@ -259,7 +274,19 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
     }
     let mut media = Vec::with_capacity(prepared.len());
     let mut texts = Vec::new();
+    let large = "large".to_string();
+    let mut figures = std::collections::HashSet::new();
+    let mut structured_count = 0usize;
     for p in prepared {
+        if p.document.file_format == "xml" {
+            structured_count += 1;
+        }
+        for (id, bytes) in &p.images {
+            // The same illustration is reused across documents.
+            if figures.insert(*id) {
+                store.upsert_workshop_image(*id, &large, bytes)?;
+            }
+        }
         media.push((p.media_id, p.content));
         if let Some(t) = p.text {
             texts.push((p.hkap_id, t));
@@ -269,6 +296,9 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
     store.upsert_media_images(media)?;
     store.upsert_document_texts(texts)?;
 
+    if structured_dir.is_some() {
+        println!("  {} structured, {} figures", structured_count, figures.len());
+    }
     println!(
         "Done. {} documents ({} skipped), {} folder nodes, text extracted for {}/{} in {:.1}s",
         total,

@@ -7,11 +7,9 @@ use anyhow::{bail, Result};
 use lopdf::{Document as PdfDocument, Object, ObjectId};
 use rayon::prelude::*;
 use regex::Regex;
-use serde_derive::Deserialize;
 use serde_json::json;
-use std::collections::HashMap;
 use pcss::api_types::Response;
-use pcss::workshop_literature::{Children, DocumentType, FileFormat, LanguageCode, Toc, WorkshopLiterature};
+use pcss::workshop_literature::{DocumentType, FileFormat, LanguageCode, WorkshopLiterature};
 use crate::content_store::ContentStore;
 use crate::models::{Document, TreeNode, Vehicle};
 use crate::settings::Settings;
@@ -47,23 +45,6 @@ struct StructuredExtras {
     /// Search text.
     text: String,
 }
-
-/// A document converted from its PDF by `tools/ferrari_extract.py`: the same
-/// content tree the Porsche documents have. Only documents whose conversion
-/// passed its checks against the PDF (`passed`) are loaded this way.
-#[derive(Deserialize)]
-struct StructuredDocument {
-    passed: bool,
-    content: Children,
-    /// Headings, for the contents menu.
-    toc: Vec<Toc>,
-    /// Workshop image id -> file, relative to the structured directory.
-    images: HashMap<String, String>,
-    text: String,
-    /// "Latest Update" date printed on the document (YYYY-MM-DD).
-    updated: Option<String>,
-}
-
 
 const FERRARI_LINK_PREFIX: &'static str = "https://modiscs.ferrari.it/techdoc_techinfo/";
 const ROOT: &'static str = "https://workbook.birdstreetexotics.com";
@@ -308,13 +289,15 @@ impl FerrariLoader {
     /// Read a queued PDF, rewrite its links, and build the document payload. Pure
     /// (no DB access) so it can run on the rayon pool across all cores.
     fn prepare_pdf(&self, w: &PdfWork, structured_dir: Option<&Path>) -> Result<PreparedFerrari> {
-        let structured = structured_dir.and_then(|dir| self.read_structured(dir, w));
+        let structured = structured_dir
+            .and_then(|dir| crate::structured::read(dir, w.file_name.trim_end_matches(".pdf")));
         let publication_date = structured.as_ref()
-            .and_then(|(doc, _)| doc.updated.as_ref())
+            .and_then(|s| s.document.updated.as_ref())
             .map(|date| format!("{}T00:00:00.000+00:00", date))
             .unwrap_or_else(|| "2026-01-28T16:35:14.636+02:00".to_string());
         let (content_tree, toc, extras) = match structured {
-            Some((doc, images)) => (Some(doc.content), Some(doc.toc), Some(StructuredExtras { images, text: doc.text })),
+            Some(s) => (Some(s.document.content), Some(s.document.toc),
+                        Some(StructuredExtras { images: s.images, text: s.document.text })),
             None => (None, None, None),
         };
 
@@ -384,36 +367,6 @@ impl FerrariLoader {
             hkap_id: w.hkap_id.clone(),
             structured: extras,
         })
-    }
-
-    /// The structured form of a PDF, if it was converted and passed its checks.
-    /// Anything wrong with it (unreadable, a shape the document types reject, a
-    /// missing figure) falls back to the PDF with a warning.
-    fn read_structured(&self, dir: &Path, w: &PdfWork) -> Option<(StructuredDocument, Vec<(i32, Vec<u8>)>)> {
-        let path = dir.join(format!("{}.json", w.file_name.trim_end_matches(".pdf")));
-        let raw = fs::read(&path).ok()?;
-        let doc: StructuredDocument = match serde_json::from_slice(&raw) {
-            Ok(doc) => doc,
-            Err(e) => {
-                eprintln!("Warning: {} is not a valid structured document ({}); loading the PDF", path.display(), e);
-                return None;
-            }
-        };
-        if !doc.passed {
-            return None;
-        }
-        let mut images = Vec::with_capacity(doc.images.len());
-        for (key, file) in &doc.images {
-            let loaded = key.parse::<i32>().ok().zip(fs::read(dir.join(file)).ok());
-            match loaded {
-                Some((id, bytes)) => images.push((id, bytes)),
-                None => {
-                    eprintln!("Warning: {} is missing figure {}; loading the PDF", path.display(), file);
-                    return None;
-                }
-            }
-        }
-        Some((doc, images))
     }
 
     fn stable_uuid(&self, model: &str, year: i32, key: &str) -> Uuid {

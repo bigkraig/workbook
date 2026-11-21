@@ -60,9 +60,18 @@ load-ferrari:
 
 # The split step (tools/r8_split.py) needs python3 + pypdf on PATH. If pypdf is already
 # available (e.g. a nixpkgs python built with it), use it as-is; otherwise pip-install it.
+AUDI_PATH       ?= source_files/audi/2018-R8
+AUDI_SPLIT      ?= generated/audi/2018-R8-split
+AUDI_STRUCTURED ?= generated/audi/2018-R8-structured
+
+# r8_split.py cuts the manuals into documents; r8_extract.py converts those into
+# structured documents and checks each against its PDF; the loader takes the ones
+# that passed and loads the rest as PDFs. Needs pdfminer.six and poppler's pdftotext too.
 load-audi:
-	python3 -c "import pypdf" 2>/dev/null || python3 -m pip install -q -r tools/requirements.txt
-	cargo run -- load-audi
+	python3 -c "import pypdf, pdfminer" 2>/dev/null || python3 -m pip install -q -r tools/requirements.txt
+	test -f $(AUDI_SPLIT)/manifest.json || python3 tools/r8_split.py $(AUDI_PATH) $(AUDI_SPLIT)
+	python3 tools/r8_extract.py $(AUDI_SPLIT) $(AUDI_STRUCTURED)
+	cargo run -- load-audi --path $(AUDI_SPLIT) --structured $(AUDI_STRUCTURED)
 
 version:
 	@echo $(VERSION)

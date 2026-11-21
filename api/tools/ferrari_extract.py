@@ -498,6 +498,10 @@ class Converter:
 
         content = self.blocks(body, top=True)
         self.number(content)
+        # One step per block: the app follows the reading position block by block,
+        # so this is what lets it keep each step's photo beside the step being read.
+        content = [piece for block in content for piece in (
+            [{"type": "plot", "inputs": [item]} for item in block["inputs"]] if block["type"] == "plot" else [block])]
         self.strip(content)
         updated = re.search(r"Latest Update:\s*(\d{4}-\d{2}-\d{2})", banner)
         return {

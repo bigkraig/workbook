@@ -6,5 +6,6 @@ pub mod content_store;
 pub mod ferrari_loader;
 pub mod audi_loader;
 pub mod pdf_text;
+pub mod structured;
 
 extern crate mime_sniffer;
