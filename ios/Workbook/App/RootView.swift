@@ -89,6 +89,7 @@ struct RootView: View {
                 }
         }
         .id(vehicle.id)
+        .simultaneousGesture(backToGarage(atRoot: navigator.path.isEmpty))
     }
 
     // MARK: - Two panes
@@ -113,6 +114,18 @@ struct RootView: View {
                 .navigationDestination(for: TreeNode.self) { BrowseView(vehicle: vehicle, node: $0) }
         }
         .id(vehicle.id)
+        .simultaneousGesture(backToGarage(atRoot: navigator.nodes.isEmpty))
+    }
+
+    /// The top of a car's tree is the bottom of its stack, so there is nothing
+    /// for the system's swipe-back to pop; swiping in from the left edge there
+    /// goes back to the garage, like the cars button.
+    private func backToGarage(atRoot: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 24).onEnded { drag in
+            guard atRoot, drag.startLocation.x < 44,
+                  drag.translation.width > 70, abs(drag.translation.height) < 70 else { return }
+            withAnimation(.snappy) { navigator.vehicle = nil }
+        }
     }
 
     @ViewBuilder

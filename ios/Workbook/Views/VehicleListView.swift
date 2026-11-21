@@ -173,27 +173,30 @@ private struct VehicleCard: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
-                Text("\(vehicle.vehicle) · \(String(vehicle.year))")
-                    .font(.system(.caption, design: .monospaced))
-                    .tracking(1.5)
-                    .foregroundStyle(Theme.brass)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text("\(vehicle.vehicle) · \(String(vehicle.year))")
+                        .font(.system(.caption, design: .monospaced))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.brass)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 0)
+                    // Beside the code, clear of the picture.
+                    if recent > 0 {
+                        Text("\(recent) recent")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(.white.opacity(0.08), in: Capsule())
+                            .fixedSize()
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 12)
         }
         .background(Theme.ink2, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.06)))
-        .overlay(alignment: .topTrailing) {
-            if recent > 0 {
-                Text("\(recent) recent")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(.white.opacity(0.08), in: Capsule())
-                    .padding(8)
-            }
-        }
         .contentShape(RoundedRectangle(cornerRadius: 14))
     }
 }
