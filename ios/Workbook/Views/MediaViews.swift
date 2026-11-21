@@ -12,7 +12,21 @@ struct RemoteImage: View {
     /// Crop away transparent margins, so pictures with different amounts of
     /// empty space around them (the cars) come out the same size.
     var trimmed = false
-    @State private var media: Loadable<Media> = .loading
+    @State private var media: Loadable<Media>
+
+    init(path: String, zoomable: Bool = false, trimmed: Bool = false) {
+        self.path = path
+        self.zoomable = zoomable
+        self.trimmed = trimmed
+        // A picture seen before is shown at once: without this every screen
+        // change flashed a spinner where each picture was about to be.
+        let seen = Self.decoded.object(forKey: Self.key(path, trimmed)).map { Loadable<Media>.loaded(.raster($0)) }
+        _media = State(initialValue: seen ?? .loading)
+    }
+
+    /// Decoded (and trimmed) pictures, kept while memory allows.
+    private static let decoded = NSCache<NSString, UIImage>()
+    private static func key(_ path: String, _ trimmed: Bool) -> NSString { "\(trimmed ? "t" : "f")\(path)" as NSString }
 
     enum Media {
         case raster(UIImage)
@@ -43,7 +57,9 @@ struct RemoteImage: View {
         do {
             let (data, contentType) = try await MediaStore.shared.load(path, api: API(settings: settings))
             if !contentType.contains("svg"), let image = UIImage(data: data) {
-                media = .loaded(.raster(trimmed ? image.trimmingTransparentEdges() : image))
+                let shown = trimmed ? image.trimmingTransparentEdges() : image
+                Self.decoded.setObject(shown, forKey: Self.key(path, trimmed))
+                media = .loaded(.raster(shown))
             } else if let svg = String(data: data, encoding: .utf8), svg.contains("<svg") {
                 media = .loaded(.svg(svg, aspect: Self.aspect(of: svg)))
             } else {

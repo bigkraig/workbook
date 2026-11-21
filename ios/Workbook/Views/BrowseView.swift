@@ -9,8 +9,18 @@ struct BrowseView: View {
     /// nil for the vehicle's root.
     let node: TreeNode?
 
-    @State private var level: Loadable<TreeNode> = .loading
-    @State private var documents: Loadable<[DocumentSummary]> = .loading
+    @State private var level: Loadable<TreeNode>
+    @State private var documents: Loadable<[DocumentSummary]>
+
+    init(vehicle: Vehicle, node: TreeNode?) {
+        self.vehicle = vehicle
+        self.node = node
+        // A level seen before is shown at once (and refreshed behind the
+        // scenes), so moving around the tree doesn't flash a spinner.
+        let seen = BrowseCache.shared.levels[BrowseCache.key(vehicle, node)]
+        _level = State(initialValue: seen.map { .loaded($0.level) } ?? .loading)
+        _documents = State(initialValue: seen.map { .loaded($0.documents) } ?? .loading)
+    }
     @State private var query = ""
     @State private var results: Loadable<[DocumentSummary]>?
 
@@ -147,7 +157,9 @@ struct BrowseView: View {
             let loaded: TreeNode
             if let node { loaded = try await api.node(node.nodeId) } else { loaded = try await api.rootNode(vehicle) }
             level = .loaded(loaded)
-            documents = .loaded(try await api.documents(node: loaded.nodeId))
+            let list = try await api.documents(node: loaded.nodeId)
+            documents = .loaded(list)
+            BrowseCache.shared.levels[BrowseCache.key(vehicle, node)] = (loaded, list)
         } catch APIError.notSignedIn {
             // RootView is presenting the login sheet; reload when the session changes.
         } catch {
@@ -167,4 +179,12 @@ struct BrowseView: View {
         catch is CancellationError {}
         catch { if !Task.isCancelled { results = .failed(error.localizedDescription) } }
     }
+}
+
+/// Tree levels already loaded this session, by vehicle and node.
+@MainActor
+final class BrowseCache {
+    static let shared = BrowseCache()
+    var levels: [String: (level: TreeNode, documents: [DocumentSummary])] = [:]
+    static func key(_ vehicle: Vehicle, _ node: TreeNode?) -> String { "\(vehicle.id)/\(node?.nodeId ?? 0)" }
 }

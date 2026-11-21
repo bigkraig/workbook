@@ -40,6 +40,8 @@ final class Navigator {
     /// Inner screen: hide the browser and give the document both halves.
     var focused = false
     var recents: [Recent] = []
+    /// The garage, kept so the start screen shows at once when you come back to it.
+    var vehicles: [Vehicle] = []
     /// Search text a deep link asked for; the vehicle's root browser picks it up.
     var pendingSearch: String?
     /// A deep link that arrived before sign-in (or before the vehicle list

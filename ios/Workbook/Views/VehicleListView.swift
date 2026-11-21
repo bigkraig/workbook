@@ -12,6 +12,12 @@ struct VehicleListView: View {
     @State private var vehicles: Loadable<[Vehicle]> = .loading
     @State private var showSettings = false
 
+    /// The cars to show: what was just loaded, or what we knew from last time.
+    private var garageState: Loadable<[Vehicle]> {
+        if case .loading = vehicles, !navigator.vehicles.isEmpty { return .loaded(navigator.vehicles) }
+        return vehicles
+    }
+
     var body: some View {
         GeometryReader { geo in
             let wide = geo.size.width > 700
@@ -21,16 +27,24 @@ struct VehicleListView: View {
             Group {
                 if wide {
                     HStack(alignment: .top, spacing: 0) {
-                        ScrollView { garage(columns: 2) }.frame(width: leading)
+                        ScrollView { garage(columns: 2, gear: false) }.frame(width: leading)
                         Rectangle().fill(.white.opacity(0.08)).frame(width: 1)
-                        ScrollView { continueReading(includingLatest: true).padding(.top, 78) }
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Settings sits at the far right of the screen.
+                                HStack { Spacer(); settingsButton }
+                                    .padding(.horizontal, 18)
+                                    .frame(height: 78)
+                                continueReading(includingLatest: true)
+                            }
+                        }
                     }
                 } else {
                     ScrollView {
                         // One column: the way back into the last document
                         // comes first, then the cars, then the older ones.
                         VStack(alignment: .leading, spacing: 0) {
-                            header
+                            header(gear: true)
                             if let latest = navigator.recents.first {
                                 Button { open(latest) } label: { LatestCard(recent: latest) }
                                     .buttonStyle(.plain)
@@ -53,10 +67,10 @@ struct VehicleListView: View {
     // MARK: - Garage
 
     @ViewBuilder
-    private func garage(columns: Int, withHeader: Bool = true) -> some View {
+    private func garage(columns: Int, withHeader: Bool = true, gear: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if withHeader { header }
-            switch vehicles {
+            if withHeader { header(gear: gear) }
+            switch garageState {
             case .loading:
                 ProgressView().tint(.white).frame(maxWidth: .infinity).padding(40)
             case .failed(let message):
@@ -80,7 +94,15 @@ struct VehicleListView: View {
         }
     }
 
-    private var header: some View {
+    private var settingsButton: some View {
+        Button { showSettings = true } label: {
+            Image(systemName: "gearshape").font(.title3).foregroundStyle(.white.opacity(0.7))
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Settings")
+    }
+
+    private func header(gear: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             WorkbookMark().frame(width: 34, height: 34).foregroundStyle(.white)
             VStack(alignment: .leading, spacing: 2) {
@@ -91,14 +113,11 @@ struct VehicleListView: View {
                 Text("Service reference").font(.caption).foregroundStyle(.white.opacity(0.55))
             }
             Spacer()
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape").font(.title3).foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel("Settings")
+            if gear { settingsButton }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 18)
+        .frame(minHeight: 78)
     }
 
     private func sectionTitle(_ title: String) -> some View {
@@ -144,7 +163,13 @@ struct VehicleListView: View {
     }
 
     private func load() async {
-        do { vehicles = .loaded(try await API(settings: settings).vehicles()) }
+        // Show the cars we already know while asking again, rather than a spinner.
+        if !navigator.vehicles.isEmpty { vehicles = .loaded(navigator.vehicles) }
+        do {
+            let fresh = try await API(settings: settings).vehicles()
+            navigator.vehicles = fresh
+            vehicles = .loaded(fresh)
+        }
         catch APIError.notSignedIn { vehicles = .loading }
         catch { vehicles = .failed(error.localizedDescription) }
     }
@@ -173,23 +198,11 @@ private struct VehicleCard: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
-                HStack(spacing: 6) {
-                    Text("\(vehicle.vehicle) · \(String(vehicle.year))")
-                        .font(.system(.caption, design: .monospaced))
-                        .tracking(1.5)
-                        .foregroundStyle(Theme.brass)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    Spacer(minLength: 0)
-                    // Beside the code, clear of the picture.
-                    if recent > 0 {
-                        Text("\(recent) recent")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(.white.opacity(0.08), in: Capsule())
-                            .fixedSize()
-                    }
+                // The badge sits beside the code when both fit (clear of the
+                // picture), and under it at larger text sizes rather than cut the code short.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { code; Spacer(minLength: 0); badge }
+                    VStack(alignment: .leading, spacing: 6) { code; badge }
                 }
             }
             .padding(.horizontal, 14)
@@ -198,6 +211,29 @@ private struct VehicleCard: View {
         .background(Theme.ink2, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.06)))
         .contentShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+private extension VehicleCard {
+    var code: some View {
+        Text("\(vehicle.vehicle) · \(String(vehicle.year))")
+            .font(.system(.caption, design: .monospaced))
+            .tracking(1.5)
+            .foregroundStyle(Theme.brass)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    var badge: some View {
+        if recent > 0 {
+            Text("\(recent) recent")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(.white.opacity(0.08), in: Capsule())
+                .fixedSize()
+        }
     }
 }
 
@@ -224,6 +260,7 @@ private struct LatestCard: View {
                     }
                     Text(recent.vehicle.name).font(.footnote)
                 }
+                .lineLimit(1)
                 .foregroundStyle(Theme.ink.opacity(0.7))
             }
             Spacer(minLength: 0)

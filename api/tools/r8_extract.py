@@ -912,8 +912,8 @@ def convert(entry: dict, split_dir: str, out_dir: str) -> dict:
     if report["passed"]:
         parts, targets, named = split_sections(entry["hkap_id"], entry, document, converter.anchors)
     else:
-        parts, targets, named = [dict(document, hkap_id=entry["hkap_id"], title=entry["title"],
-                                      index=entry["node_value"])], [], []
+        parts, targets, named = [dict(document, hkap_id=entry["hkap_id"], title=entry["title"] + entry["suffix"],
+                                      index=entry["code"])], [], []
     for part in parts:
         with open(os.path.join(out_dir, part["hkap_id"] + ".json"), "w") as handle:
             json.dump(part, handle, indent=1, ensure_ascii=False)
@@ -951,7 +951,7 @@ def split_sections(hkap: str, entry: dict, document: dict, anchors: list[tuple])
                 content[i] = {"type": "static", "inputs": {"html": f"<h4>{m.group(3)}</h4>", "para": False}}
         heads = [(i, m) for i, m in heads if m.group(2) not in minor]
     if len(heads) < 2:
-        part = dict(document, hkap_id=hkap, title=entry["title"], index=entry["node_value"])
+        part = dict(document, hkap_id=hkap, title=entry["title"] + entry["suffix"], index=entry["code"])
         named = [(entry["title"], hkap)] + [(re.sub(r"<[^>]+>", "", m.group(3)), hkap) for _, m in heads]
         return [part], [(page, frac, hkap) for page, frac, _ in anchors], named
     positions = document["positions"]
@@ -993,15 +993,15 @@ def split_sections(hkap: str, entry: dict, document: dict, anchors: list[tuple])
         number = re.match(r"(\d+(?:\.\d+)*)\s+(.*)$", heading, re.S)
         title = number.group(2) if number else heading
         parts.append({
-            "hkap_id": sub, "title": title,
-            "index": section_code(entry["node_value"], number.group(1) if number else None, len(parts) + 1),
+            "hkap_id": sub, "title": title + entry["suffix"],
+            "index": section_code(entry["code"], number.group(1) if number else None, len(parts) + 1),
             "passed": True, "content": blocks, "toc": toc, "positions": positions[start + 1:end],
             "images": {k: v for k, v in document["images"].items() if k in keys},
             "text": heading + "\n" + re.sub(r"[ \t]+", " ", "\n".join(t.strip() for t in produced if t.strip())),
         })
     if not parts:
         # Nothing but pointers elsewhere: keep the chapter as the one document it is.
-        part = dict(document, hkap_id=hkap, title=entry["title"], index=entry["node_value"])
+        part = dict(document, hkap_id=hkap, title=entry["title"] + entry["suffix"], index=entry["code"])
         named = [(entry["title"], hkap)] + [(plain(m.group(3)), hkap) for _, m in heads]
         return [part], [(page, frac, hkap) for page, frac, _ in anchors], named
     # A heading with no document of its own leads to the first one under it.
@@ -1218,6 +1218,26 @@ def resolve_links(out_dir: str, reports: list[dict]) -> dict:
     return dict(stats)
 
 
+def technical_data_context(entry: dict, manifest: dict) -> dict:
+    """Every manual opens with its own repair group 00 ("Technical data"), with
+    the same chapters: Identification, Safety precautions, Repair notes. In a
+    list they are a dozen identical rows numbered 00.1. So a document there
+    carries its main group in its code (4.00.1 is the chassis's) and, where a
+    main group has several manuals, the manual's name after its title."""
+    if entry["vehicle_component"] != "00":
+        return {"code": entry["node_value"], "suffix": ""}
+    nodes = {n["node_id"]: n for n in manifest["nodes"]}
+    chain, node = [], nodes.get(entry["parent_node_id"])
+    while node is not None and node.get("parent_node_id") in nodes:
+        chain.append(node)
+        node = nodes[node["parent_node_id"]]
+    main = node["node_value"].strip() if node is not None else ""
+    # (the chain runs from the document's folder up to, but not including, the main group)
+    manual = chain[0]["name"] if chain and chain[0]["node_value"].strip() != "00" else ""
+    return {"code": f'{main}.{entry["node_value"]}' if main else entry["node_value"],
+            "suffix": f" · {manual}" if manual else ""}
+
+
 def _worker(args):
     entry = args[0]
     try:
@@ -1236,7 +1256,8 @@ if __name__ == "__main__":
     split_dir, out_dir = sys.argv[1], sys.argv[2]
     only = sys.argv[3:]
     manifest = json.load(open(os.path.join(split_dir, "manifest.json")))
-    entries = [d for d in manifest["documents"] if not only or any(o in d["pdf"] for o in only)]
+    entries = [dict(d, **technical_data_context(d, manifest))
+               for d in manifest["documents"] if not only or any(o in d["pdf"] for o in only)]
     if not only:
         shutil.rmtree(out_dir, ignore_errors=True)
     os.makedirs(os.path.join(out_dir, "media"), exist_ok=True)
