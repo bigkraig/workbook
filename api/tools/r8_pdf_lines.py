@@ -130,7 +130,10 @@ class _Collector(PDFDevice):
                   italic=abs(matrix[2]) > 0.01, red=red, end=round(matrix[4] + width, 1))
         y = round(matrix[5], 1)
         last = self.items[-1] if self.items else None
-        if isinstance(last, Line) and abs(last.y - y) < 1 and abs(last.size - size) < 0.1 and run.x >= last.x:
+        # Pieces of one line follow each other closely; a jump along the same
+        # baseline is the next column of a table.
+        if (isinstance(last, Line) and abs(last.y - y) < 1 and abs(last.size - size) < 0.1
+                and -2 <= run.x - last.runs[-1].end <= 24):
             last.runs.append(run)
         else:
             self.items.append(Line(y=y, x=run.x, size=size, runs=[run]))

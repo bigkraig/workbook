@@ -89,7 +89,7 @@ def absorb(current, item: Line) -> bool:
             run.shift = "sup" if dy > 0 else "sub"
         current.runs.extend(item.runs)
         return True
-    if abs(dy) < 1.6 and item.x >= current.runs[-1].x:
+    if abs(dy) < 1.6 and -2 <= item.x - current.runs[-1].end <= 24:
         current.runs.extend(item.runs)
         return True
     return False
@@ -271,10 +271,16 @@ class Converter:
             ys = [v for r in group for v in (r.y0, r.y1)]
             box = (min(xs), min(ys), max(xs), max(ys))
             members = [l for l in lines if inside(box, l.x, l.y + 2, pad=0.5)]
-            if not members or not any(r.vertical for r in group):
+            if not any(r.vertical for r in group):
+                ruled = self.headed_table(group, lines, page)
+                if ruled:
+                    out.append(ruled)
+                continue
+            if not members:
                 continue
             cols = uniq([box[0], box[2]] + [r.x0 for r in group if r.vertical], 2.5)
             rows = uniq([box[1], box[3]] + [r.y0 for r in group if r.horizontal], 3.5)[::-1]   # top to bottom
+            position = {id(item): n for n, item in enumerate(page.items)}
             grid: dict[tuple, list[Line]] = collections.defaultdict(list)
             for line in members:
                 row = max((i for i in range(len(rows) - 1) if rows[i] >= line.y + 2), default=0)
@@ -296,7 +302,7 @@ class Converter:
                             and min(r.y0, r.y1) - 1 <= mid <= max(r.y0, r.y1) + 1 for r in group):
                         span += 1
                     held = [l for c in range(col, col + span) for l in grid.get((row, c), [])]
-                    held.sort(key=lambda l: (-round(l.y), l.x))
+                    held.sort(key=lambda l: position[id(l)])     # drawing order
                     vlines = self.join_pieces(held, page)
                     markup = self.markup(vlines)
                     texts.extend(v.text for v in vlines)
@@ -320,6 +326,79 @@ class Converter:
                 inputs["header"] = header
             out.append((Table({"type": "table", "inputs": inputs}, box[3], page, texts, members[0]), members))
         return out
+
+    def headed_table(self, group: list[Rule], lines: list[Line], page: Page):
+        """A table drawn with nothing but a rule under its header. The rule is
+        drawn in one segment per column, which gives the columns; rows are set
+        apart by a wider gap than the lines within a row."""
+        rule_y = max(r.y0 for r in group)
+        cols = uniq([v for r in group for v in (r.x0, r.x1)], 2.5)
+        if len(cols) < 3 or max(r.y0 for r in group) - min(r.y0 for r in group) > 2:
+            return None
+        left, right = cols[0], cols[-1]
+        header = [l for l in lines if rule_y < l.y < rule_y + 34 and left - 1 <= l.x <= right and l.bold]
+        # The header is the bold lines directly above the rule.
+        header.sort(key=lambda l: -l.y)
+        kept, last_y = [], None
+        for line in sorted(header, key=lambda l: l.y):
+            if last_y is not None and line.y - last_y > 12:
+                break
+            kept.append(line)
+            last_y = line.y
+        header = kept
+        body = []
+        # An icon or figure below the header is past the table too.
+        floor = max((i.y + i.h for i in page.items if isinstance(i, Image) and i.y + i.h < rule_y and i.x < right),
+                    default=-1)
+        for line in sorted((l for l in lines if l.y < rule_y), key=lambda l: -l.y):
+            if line.y <= floor + 2:
+                break
+            # The table's text is inset from the margin; the first line back at
+            # the margin (or a heading) is past the table.
+            if line.x < left + 1 or line.size >= 13 or line.x > right:
+                break
+            body.append(line)
+        if not header or not body:
+            return None
+
+        position = {id(item): n for n, item in enumerate(page.items)}
+
+        def column(line: Line) -> int:
+            return max((i for i in range(len(cols) - 1) if cols[i] <= line.x + 1), default=0)
+
+        def row_cells(row_lines: list[Line]):
+            cells, row_texts = [], []
+            for col in range(len(cols) - 1):
+                # (in drawing order, which keeps a footnote mark after its number)
+                held = sorted((l for l in row_lines if column(l) == col), key=lambda l: position[id(l)])
+                vlines = self.join_pieces(held, page)
+                markup = self.markup(vlines)
+                row_texts.extend(v.text for v in vlines)
+                cells.append({"type": "static", "inputs": {"html": markup, "para": False}} if markup else "")
+            return cells, row_texts
+
+        texts: list[str] = []
+        head_cells, head_texts = row_cells(header)
+        texts.extend(head_texts)
+        rows, current, last_y = [], [], None
+        for line in body:
+            if last_y is not None and last_y - line.y > 12 and current:
+                rows.append(current)
+                current = []
+            current.append(line)
+            last_y = line.y if last_y is None or line.y < last_y else last_y
+        if current:
+            rows.append(current)
+        data = []
+        for row in rows:
+            cells, row_texts = row_cells(row)
+            data.append(cells)
+            texts.extend(row_texts)
+        self.counts["tables"] += 1
+        members = header + body
+        first = min(members, key=lambda l: position[id(l)])
+        node = {"type": "table", "inputs": {"data": data, "pgwide": False, "header": [head_cells]}}
+        return Table(node, max(l.y + l.size for l in header), page, texts, first), members
 
     def join_pieces(self, lines: list[Line], page: Page) -> list[VLine]:
         out: list[VLine] = []
