@@ -126,6 +126,14 @@ struct RootView: View {
                     .navigationDestination(for: DetailRoute.self) { DetailScreen(route: $0) }
             }
             .id(root)
+            // A document opened from the tree is the bottom of its stack, so the
+            // system's swipe-back has nothing to pop. Swiping in from the pane's
+            // left edge closes it instead, the same way back to the tree.
+            .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
+                guard navigator.detail.count == 1, drag.startLocation.x < 44,
+                      drag.translation.width > 70, abs(drag.translation.height) < 70 else { return }
+                withAnimation(.snappy) { navigator.closeDetail() }
+            })
         } else {
             DetailPlaceholder(vehicle: vehicle)
         }
