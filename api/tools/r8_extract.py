@@ -52,6 +52,7 @@ class VLine:
         self.size = line.size
         self.runs = list(line.runs)
         self.box = None
+        self.key = (round(line.y, 1), round(line.x, 1))     # its first piece, as drawn
 
     @property
     def top(self) -> float:
@@ -87,6 +88,13 @@ def absorb(current, item: Line) -> bool:
     if 1.6 <= abs(dy) < 6.5 and follows and len(item.text.strip()) <= 4:
         for run in item.runs:
             run.shift = "sup" if dy > 0 else "sub"
+        current.runs.extend(item.runs)
+        return True
+    if 1.6 <= abs(dy) < 6.5 and follows and len(current.text.strip()) <= 4 and len(current.runs) == 1:
+        # The line opened with the raised or lowered character (the "2" of a
+        # 1/2 that wrapped); the text after it sets the baseline.
+        current.runs[0].shift = "sub" if dy > 0 else "sup"
+        current.y = item.y
         current.runs.extend(item.runs)
         return True
     if abs(dy) < 1.6 and -2 <= item.x - current.runs[-1].end <= 24:
@@ -157,6 +165,8 @@ class Converter:
         self.toc: list[dict] = []
         self.anchors: list[tuple] = []        # (page number 1-based, fraction from top, anchor id)
         self.source: list[str] = []           # body text in the order the PDF draws it
+        self.source_tables: list[str] = []    # each table's text
+        self.source_flow_skip: list[tuple] = []   # where the tables sit in `source`
         self.figure_ids = 0
         self.title = ""
 
@@ -176,7 +186,7 @@ class Converter:
         body = [i for i in page.items if not (
             (isinstance(i, Line) and (i.y > BODY_TOP or i.y < BODY_BOTTOM))
             or (isinstance(i, Image) and i.px == LOGO)
-            or (isinstance(i, Rule) and (i.red or max(i.y0, i.y1) > BODY_TOP or min(i.y0, i.y1) < BODY_BOTTOM + 8)))]
+            or (isinstance(i, Rule) and (i.red or max(i.y0, i.y1) > BODY_TOP or min(i.y0, i.y1) < BODY_BOTTOM + 2.5)))]
         lines = [i for i in body if isinstance(i, Line)]
         if base is None:
             base = 70.9 if logo is not None and logo.x > 300 else 42.5
@@ -238,13 +248,15 @@ class Converter:
         def drawn_at(e):
             if isinstance(e, Table):
                 return order[id(e.first)]
-            return first_piece.get((round(e.y, 1), round(e.x, 1)), 0)
+            return first_piece.get(e.key, 0)
         drawn: list = sorted((e for e in elements if isinstance(e, (VLine, Table))), key=drawn_at)
         for element in drawn:
             if isinstance(element, VLine):
                 self.source.append(element.text)
             else:
                 self.source.extend(element.texts)
+                self.source_tables.append(dehyphenated(element.texts))
+                self.source_flow_skip.append((len(self.source) - len(element.texts), len(self.source)))
         elements.sort(key=lambda e: -e.top)
         return elements
 
@@ -290,18 +302,38 @@ class Converter:
                 grid[(row, col)].append(line)
             header, data, texts = [], [], []
             body_started = False
+
+            def ruled(y: float, col: int) -> bool:
+                """Is there a rule across this column at this height?"""
+                mid = (cols[col] + cols[col + 1]) / 2
+                return any(r.horizontal and abs(r.y0 - y) < 3.5
+                           and min(r.x0, r.x1) - 1 <= mid <= max(r.x0, r.x1) + 1 for r in group)
+
+            taken: set[tuple] = set()      # cells covered by a cell that spans down from above
             for row in range(len(rows) - 1):
                 mid = (rows[row] + rows[row + 1]) / 2
                 cells, col = [], 0
                 bold = []
                 while col < len(cols) - 1:
+                    if (row, col) in taken:
+                        cells.append("")
+                        col += 1
+                        continue
                     span = 1
                     # No rule between two columns on this row: one cell spans them.
-                    while col + span < len(cols) - 1 and not any(
+                    while col + span < len(cols) - 1 and (row, col + span) not in taken and not any(
                             r.vertical and abs(r.x0 - cols[col + span]) < 2.5
                             and min(r.y0, r.y1) - 1 <= mid <= max(r.y0, r.y1) + 1 for r in group):
                         span += 1
-                    held = [l for c in range(col, col + span) for l in grid.get((row, c), [])]
+                    # No rule under the cell: it runs on down into the next row. Its
+                    # text stays in its first row; the rows below get an empty cell.
+                    depth = 1
+                    while row + depth < len(rows) - 1 and not any(ruled(rows[row + depth], c) for c in range(col, col + span)):
+                        depth += 1
+                    held = [l for r in range(row, row + depth) for c in range(col, col + span) for l in grid.get((r, c), [])]
+                    for r in range(row + 1, row + depth):
+                        for c in range(col, col + span):
+                            taken.add((r, c))
                     held.sort(key=lambda l: position[id(l)])     # drawing order
                     vlines = self.join_pieces(held, page)
                     markup = self.markup(vlines)
@@ -752,7 +784,38 @@ def check(path: str, converter: Converter, document: dict) -> dict:
     source_text = dehyphenated(converter.source).replace(SOFT_HYPHEN, "")
     missing = added = 0
     samples = []
+    table_moved = False
     if source_text != produced_text:
+        # Some pages draw a table before the text above it. Then the order check
+        # is made without the tables, and the tables are compared one by one.
+        skip = {i for a, b in converter.source_flow_skip for i in range(a, b)}
+        flow = dehyphenated([t for i, t in enumerate(converter.source) if i not in skip]).replace(SOFT_HYPHEN, "")
+        out_flow: list[str] = []
+        out_tables: list[str] = []
+
+        def split(value):
+            if isinstance(value, list):
+                for item in value:
+                    split(item)
+            elif isinstance(value, dict) and value.get("type") == "table":
+                parts: list[str] = []
+                texts(value, parts)
+                out_tables.append(squeeze("".join(parts)).replace(SOFT_HYPHEN, ""))
+            elif isinstance(value, dict) and value.get("type") == "plot":
+                for item in value["inputs"]:
+                    split(item.get("children", []))
+            elif isinstance(value, dict) and value.get("type") == "warning":
+                out_flow.append(value.get("_label", ""))
+                split(value["inputs"].get("children", []))
+            elif isinstance(value, dict) and value.get("type") == "list":
+                split(value["inputs"].get("items", []))
+            else:
+                texts(value, out_flow)
+        split(document["content"])
+        if (squeeze("".join(out_flow)).replace(SOFT_HYPHEN, "") == flow
+                and sorted(out_tables) == sorted(t.replace(SOFT_HYPHEN, "") for t in converter.source_tables)):
+            table_moved = True
+    if source_text != produced_text and not table_moved:
         # Trim what matches at both ends, then compare what's left (comparing two
         # long, very different texts character by character takes for ever).
         head = 0

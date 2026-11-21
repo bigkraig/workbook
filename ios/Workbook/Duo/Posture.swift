@@ -38,7 +38,10 @@ enum Posture: Equatable {
     /// half is upright, the lower half lies flat.
     case tabletop(fold: CGRect)
 
-    static func current(_ proxy: GeometryProxy, wide: Bool) -> Posture {
+    /// `bent` is whether the hinge says the phone is half-folded. The fold
+    /// region alone isn't enough: it is also reported while the phone lies
+    /// open flat, which used to flip the app into the bench layout.
+    static func current(_ proxy: GeometryProxy, wide: Bool, bent: Bool) -> Posture {
         #if DEBUG
         // The simulator's hinge can't be scripted; `-workbook.debug.posture
         // tabletop|book|open` fakes a posture so each layout can be checked.
@@ -52,7 +55,7 @@ enum Posture: Equatable {
             }
         }
         #endif
-        if let fold = ReservedLayout.fold(in: proxy) {
+        if bent, let fold = ReservedLayout.fold(in: proxy) {
             return fold.width >= fold.height ? .tabletop(fold: fold) : .book(fold: fold)
         }
         guard wide else { return .compact }

@@ -12,11 +12,20 @@ struct RootView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(Navigator.self) private var navigator
     private let layout = WideLayout()
+    /// The hinge, once it has reported; nil until then (and on other devices),
+    /// which is treated as open flat.
+    @State private var hinge: DeviceHinge?
+
+    /// Half-folded far enough to stand on the bench or hold like a book.
+    private var bent: Bool {
+        guard let hinge, hinge.status == .partiallyOpen else { return false }
+        return (60...135).contains(hinge.angle.degrees)
+    }
 
     var body: some View {
         @Bindable var settings = settings
         GeometryReader { geo in
-            let posture = Posture.current(geo, wide: layout.isWide)
+            let posture = Posture.current(geo, wide: layout.isWide, bent: bent)
             Group {
                 if let vehicle = navigator.vehicle {
                     arranged(posture, vehicle: vehicle, size: geo.size)
@@ -27,6 +36,7 @@ struct RootView: View {
             .animation(.snappy(duration: 0.25), value: navigator.focused)
         }
         .background(Theme.ink.ignoresSafeArea())
+        .onHingeChange { _, context in hinge = context.hinge }
         .fullScreenCover(isPresented: $settings.needsLogin) { SignInView() }
         .onOpenURL { url in
             Task { await navigator.open(link: url, api: API(settings: settings)) }
