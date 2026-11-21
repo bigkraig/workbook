@@ -77,14 +77,56 @@ impl Ord for Document {
 
         if s != 0 || o != 0 {
             match s.cmp(&o) {
-                Ordering::Equal => {
-                    return self.vehicle_component_with_document_index.cmp(&other.vehicle_component_with_document_index);
-                }
+                Ordering::Equal => {}
                 ordering => return ordering,
             }
         }
+        // Same leading number (or none, as in repair group "00"): the rest of
+        // the code in natural order, so 72.2.10 follows 72.2.9.
+        natural_cmp(&self.vehicle_component_with_document_index, &other.vehicle_component_with_document_index)
+            .then_with(|| self.vehicle_component.cmp(&other.vehicle_component))
+            .then_with(|| self.title.cmp(&other.title))
+    }
+}
 
-        self.vehicle_component.cmp(&other.vehicle_component)
+/// Compare two codes with their runs of digits read as numbers.
+fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
+            let (si, sj) = (i, j);
+            while i < a.len() && a[i].is_ascii_digit() { i += 1; }
+            while j < b.len() && b[j].is_ascii_digit() { j += 1; }
+            let (x, y) = (trim_zeros(&a[si..i]), trim_zeros(&b[sj..j]));
+            match x.len().cmp(&y.len()).then_with(|| x.cmp(y)) {
+                Ordering::Equal => {}
+                ordering => return ordering,
+            }
+        } else {
+            match a[i].cmp(&b[j]) {
+                Ordering::Equal => { i += 1; j += 1; }
+                ordering => return ordering,
+            }
+        }
+    }
+    (a.len() - i).cmp(&(b.len() - j))
+}
+
+fn trim_zeros(digits: &[u8]) -> &[u8] {
+    let start = digits.iter().position(|d| *d != b'0').unwrap_or(digits.len().saturating_sub(1));
+    &digits[start..]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codes_sort_naturally() {
+        let mut codes = vec!["72.2.10", "72.2.9", "00.1.20", "00.1.3", "72.2.6.1", "72.10", "72.2"];
+        codes.sort_by(|a, b| natural_cmp(a, b));
+        assert_eq!(codes, vec!["00.1.3", "00.1.20", "72.2", "72.2.6.1", "72.2.9", "72.2.10", "72.10"]);
     }
 }
 

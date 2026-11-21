@@ -913,7 +913,7 @@ def convert(entry: dict, split_dir: str, out_dir: str) -> dict:
         parts, targets, named = split_sections(entry["hkap_id"], entry, document, converter.anchors)
     else:
         parts, targets, named = [dict(document, hkap_id=entry["hkap_id"], title=entry["title"],
-                                      index=sort_index(entry["node_value"], None))], [], []
+                                      index=entry["node_value"])], [], []
     for part in parts:
         with open(os.path.join(out_dir, part["hkap_id"] + ".json"), "w") as handle:
             json.dump(part, handle, indent=1, ensure_ascii=False)
@@ -951,7 +951,7 @@ def split_sections(hkap: str, entry: dict, document: dict, anchors: list[tuple])
                 content[i] = {"type": "static", "inputs": {"html": f"<h4>{m.group(3)}</h4>", "para": False}}
         heads = [(i, m) for i, m in heads if m.group(2) not in minor]
     if len(heads) < 2:
-        part = dict(document, hkap_id=hkap, title=entry["title"], index=sort_index(entry["node_value"], None))
+        part = dict(document, hkap_id=hkap, title=entry["title"], index=entry["node_value"])
         named = [(entry["title"], hkap)] + [(re.sub(r"<[^>]+>", "", m.group(3)), hkap) for _, m in heads]
         return [part], [(page, frac, hkap) for page, frac, _ in anchors], named
     positions = document["positions"]
@@ -986,16 +986,22 @@ def split_sections(hkap: str, entry: dict, document: dict, anchors: list[tuple])
         keys = set(re.findall(r'"key": "(\d+)"', dumped))
         produced: list[str] = []
         texts(blocks, produced)
-        title = plain(match.group(3))
+        heading = plain(match.group(3))
+        # The section number is the document's code, as the chapter's is the
+        # folder's ("72.2 Front seats" holds "72.2.6.1 Removing and installing
+        # front seat ..."); the title is the heading without it.
+        number = re.match(r"(\d+(?:\.\d+)*)\s+(.*)$", heading, re.S)
+        title = number.group(2) if number else heading
         parts.append({
-            "hkap_id": sub, "title": title, "index": sort_index(entry["node_value"], len(parts) + 1),
+            "hkap_id": sub, "title": title,
+            "index": section_code(entry["node_value"], number.group(1) if number else None, len(parts) + 1),
             "passed": True, "content": blocks, "toc": toc, "positions": positions[start + 1:end],
             "images": {k: v for k, v in document["images"].items() if k in keys},
-            "text": title + "\n" + re.sub(r"[ \t]+", " ", "\n".join(t.strip() for t in produced if t.strip())),
+            "text": heading + "\n" + re.sub(r"[ \t]+", " ", "\n".join(t.strip() for t in produced if t.strip())),
         })
     if not parts:
         # Nothing but pointers elsewhere: keep the chapter as the one document it is.
-        part = dict(document, hkap_id=hkap, title=entry["title"], index=sort_index(entry["node_value"], None))
+        part = dict(document, hkap_id=hkap, title=entry["title"], index=entry["node_value"])
         named = [(entry["title"], hkap)] + [(plain(m.group(3)), hkap) for _, m in heads]
         return [part], [(page, frac, hkap) for page, frac, _ in anchors], named
     # A heading with no document of its own leads to the first one under it.
@@ -1017,14 +1023,21 @@ def split_sections(hkap: str, entry: dict, document: dict, anchors: list[tuple])
     return parts, targets, named
 
 
-def sort_index(node_value: str, part: int | None) -> str:
-    """The code shown beside a document and sorted on: the chapter's ("72.2"),
-    zero-padded so chapter 10 follows chapter 9, then the part within it."""
-    pieces = [f"{int(p):02d}" if p.isdigit() and n else p for n, p in enumerate(node_value.split("."))]
-    return ".".join(pieces) + (f".{part:02d}" if part else "")
+def section_code(node_value: str, number: str | None, part: int) -> str:
+    """A section's code: its number in the manual, under its repair group.
+    Chapter "72.2" (repair group 72, chapter 2) holds sections 2.1, 2.6.1, ...,
+    which become 72.2.1 and 72.2.6.1. A manual without repair groups (chapter
+    "3") keeps the bare section number, 3.8."""
+    pieces = node_value.split(".")
+    if number and number.split(".")[0] == pieces[-1]:
+        return ".".join(pieces[:-1] + [number])
+    if number and not node_value.strip():
+        return number
+    # The numbering doesn't follow the chapter's: fall back to its place in it.
+    return f"{node_value}.{part}" if node_value.strip() else str(part)
 
 
-PAGE_LINK = re.compile(r'href="/documents/\d+/[^/]+/([\w-]+)#page=(\d+)(?:&(?:amp;)?y=([\d.]+))?"')
+PAGE_LINK = re.compile(r'href="/documents/\d+/[^/]+/([\w-]+)#page=(\d+)(?:&(?:amp;)?y=([\d.]+))?">(.*?)</a>', re.S)
 # "⇒ Electrical system; Rep. gr. 27 ; Battery; Disconnecting and connecting battery ."
 # "⇒ Maintenance ; Booklet 421 ; Maintenance work; Brake pads: checking thickness ."
 TEXT_REF = re.compile(
@@ -1076,28 +1089,39 @@ def resolve_links(out_dir: str, reports: list[dict]) -> dict:
 
     wanted: dict[str, set[int]] = collections.defaultdict(set)     # part -> blocks that need an anchor
 
+    # Section number -> document, per chapter, for links that name their section.
+    numbered = {r["hkap_id"]: {m.group(0): dest for title, dest in r["named"]
+                               if (m := re.match(r"\d+(?:\.\d+)*", title))} for r in good}
+
     def page_link(match: re.Match) -> str:
         hkap, page, frac = match.group(1), int(match.group(2)), float(match.group(3) or 0)
+        tail = f'">{match.group(4)}</a>'
         known = targets.get(hkap)
         if not known:
             stats["left as page references"] += 1
             return match.group(0)
+        # A link that names its section ("2.3 Checking alternator", page 12) goes
+        # to that section: the spot on the page can sit a line above the heading.
+        quoted = re.search(r"“(\d+(?:\.\d+)*)\s", re.sub(r"<[^>]+>", "", match.group(4)))
+        if quoted and quoted.group(1) in numbered.get(hkap, {}):
+            stats["to the start of a document"] += 1
+            return f'href="/documents/{YEAR}/{MODEL}/{numbered[hkap][quoted.group(1)]}{tail}'
         # (headings can sit two lines apart, so the allowance is under a line)
         at_or_before = [a for a in known if (a[0], a[1]) <= (page, frac + 0.006)]
         target = at_or_before[-1] if at_or_before else known[0]
         dest = target[2]
         if target[0] == page and abs(target[1] - frac) < 0.006:
             stats["to the start of a document"] += 1
-            return f'href="/documents/{YEAR}/{MODEL}/{dest}"'
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}{tail}'
         # Somewhere inside the document: the last block printed at or above the spot.
         positions = parts[dest].get("positions") or []
         block = max((i for i, at in enumerate(positions) if at and (at[0], at[1]) <= (page, frac + 0.006)), default=None)
         if not block:
             stats["to the start of a document"] += 1
-            return f'href="/documents/{YEAR}/{MODEL}/{dest}"'
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}{tail}'
         wanted[dest].add(block)
         stats["to a place inside a document"] += 1
-        return f'href="/documents/{YEAR}/{MODEL}/{dest}#ref-{block}"'
+        return f'href="/documents/{YEAR}/{MODEL}/{dest}#ref-{block}{tail}'
 
     def text_ref(source: str):
         def swap(match: re.Match) -> str:
