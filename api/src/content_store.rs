@@ -957,6 +957,23 @@ impl ContentStore {
         Ok(())
     }
 
+    /// Remove a document and everything split out of it (`<id>` and `<id>-…`),
+    /// with their tree links and search text. Used when a chapter is reloaded as
+    /// a different set of documents.
+    pub fn remove_document_family(&self, hkap_id: &str) -> Result<()> {
+        let like = format!("{}-%", hkap_id.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        for table in ["documents", "document_links", "document_text"] {
+            let q = self.q(&format!("DELETE FROM {} WHERE hkap_id = ? OR hkap_id LIKE ? ESCAPE '\\'", table));
+            block(
+                sqlx::query(AssertSqlSafe(q.as_str()))
+                .bind(hkap_id)
+                .bind(&like)
+                .execute(&self.pool)
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn link_document_to_node(&self, node_id: i32, hkap_id: &String) -> Result<()> {
         let q = self.q("INSERT INTO document_links (node_id, hkap_id) VALUES (?, ?) \
                  ON CONFLICT(node_id, hkap_id) DO NOTHING");

@@ -505,7 +505,9 @@ class Converter:
         markup = self.markup(lines, plain_style=plain_style)
         if not re.sub(r"<[^>]+>", "", markup).strip():
             return None
-        return {"type": "static", "inputs": {"html": markup, "para": para}}
+        first = lines[0]
+        return {"type": "static", "inputs": {"html": markup, "para": para},
+                "_at": [first.page.number + 1, round((first.page.height - first.top) / first.page.height, 4)]}
 
     def figure(self, image: Image) -> dict:
         key = str(image_id(MODEL, image.sha))
@@ -624,7 +626,8 @@ class Converter:
             if heading:
                 close()
                 text = self.markup(group, plain_style=True)
-                number = re.match(r"^[\d.]+", text)
+                # (the gap between a heading's number and its title isn't always a tab)
+                text = re.sub(r"^(\d+(?:\.\d+)*)(?=[^\d\s.])", r"\1 ", text)
                 level = 2 if line.size >= 14 else 3
                 anchor = f"section-{len(self.toc) + 1}"
                 plain = html.unescape(re.sub(r"<[^>]+>", "", text))
@@ -633,7 +636,8 @@ class Converter:
                 self.toc.append({"label": plain, "anchor": anchor})
                 self.anchors.append((line.page.number + 1, (line.page.height - line.top) / line.page.height, anchor))
                 self.counts["headings"] += 1
-                emit({"type": "static", "inputs": {"html": f'<h{level} id="{anchor}">{text}</h{level}>', "para": False}},
+                emit({"type": "static", "inputs": {"html": f'<h{level} id="{anchor}">{text}</h{level}>', "para": False},
+                      "_at": [line.page.number + 1, round((line.page.height - line.top) / line.page.height, 4)]},
                      top_level=True)
                 continue
 
@@ -715,7 +719,24 @@ class Converter:
         # which is what lets it keep each step's figure beside the step being read.
         content = [piece for block in content for piece in (
             [{"type": "plot", "inputs": [item]} for item in block["inputs"]] if block["type"] == "plot" else [block])]
-        return {"title": self.title, "content": content, "toc": self.toc}
+        # Where each block was printed (page, fraction from the top), so a link to
+        # a spot inside a section can land on the block there.
+        def printed_at(value):
+            if isinstance(value, dict):
+                if "_at" in value:
+                    return value["_at"]
+                for item in value.values():
+                    found = printed_at(item)
+                    if found:
+                        return found
+            elif isinstance(value, list):
+                for item in value:
+                    found = printed_at(item)
+                    if found:
+                        return found
+            return None
+        positions = [printed_at(block) for block in content]
+        return {"title": self.title, "content": content, "toc": self.toc, "positions": positions}
 
     def number(self, blocks: list):
         count = 0
@@ -861,6 +882,8 @@ def convert(entry: dict, split_dir: str, out_dir: str) -> dict:
     document = converter.document()
     report = check(path, converter, document)
     report.update({"file": entry["pdf"], "hkap_id": entry["hkap_id"], "pages": len(pages),
+                   "group": entry["vehicle_component"], "chapter": entry["title"],
+                   "manual": os.path.splitext(entry.get("source", ""))[0].replace("_", " "),
                    "counts": dict(converter.counts), "flags": dict(converter.flags),
                    "anchors": converter.anchors})
     images = {}
@@ -883,50 +906,270 @@ def convert(entry: dict, split_dir: str, out_dir: str) -> dict:
         "passed": report["passed"], "images": images,
         "text": re.sub(r"[ \t]+", " ", "\n".join(t.strip() for t in produced if t.strip())),
     })
-    with open(os.path.join(out_dir, entry["hkap_id"] + ".json"), "w") as handle:
-        json.dump(document, handle, indent=1, ensure_ascii=False)
+    # Every link with the words it is printed as, for auditing where links land.
+    report["links"] = re.findall(r'<a class=\\"qv qv-doc\\" href=\\"([^"\\]+)\\">(.*?)</a>', json.dumps(document["content"], ensure_ascii=False))
+    report["arrows"] = re.findall(r'⇒(?![^<]{0,3}(?:“|page))[^<⇒]{3,160}', re.sub(r'<a .*?</a>', '', json.dumps(document["content"], ensure_ascii=False)))
+    if report["passed"]:
+        parts, targets, named = split_sections(entry["hkap_id"], entry, document, converter.anchors)
+    else:
+        parts, targets, named = [dict(document, hkap_id=entry["hkap_id"], title=entry["title"],
+                                      index=sort_index(entry["node_value"], None))], [], []
+    for part in parts:
+        with open(os.path.join(out_dir, part["hkap_id"] + ".json"), "w") as handle:
+            json.dump(part, handle, indent=1, ensure_ascii=False)
+    report["parts"] = [{"hkap_id": p["hkap_id"], "title": p["title"], "index": p["index"]} for p in parts]
+    report["targets"] = targets
+    report["named"] = named
     return report
 
 
-def resolve_links(out_dir: str, reports: list[dict]) -> tuple[int, int]:
-    """Links arrive as "<document>#page=N&y=F" (a spot on a PDF page). Where the
-    target document is structured, aim at the heading printed at that spot
-    instead, falling back to the heading above it."""
-    anchors = {r["hkap_id"]: sorted(tuple(a) for a in r.get("anchors", [])) for r in reports if r.get("passed")}
-    resolved = kept = 0
+HEADING = re.compile(r'^<h([23]) id="([^"]+)">(.*)</h[23]>$', re.S)
 
-    def swap(match: re.Match) -> str:
-        nonlocal resolved, kept
-        hkap, page, frac = match.group(1), int(match.group(2)), float(match.group(3) or 0)
-        known = anchors.get(hkap)
-        if not known:
-            kept += 1                     # the target stays a PDF: the page reference still works there
-            return match.group(0)
-        at_or_before = [a for a in known if (a[0], a[1]) <= (page, frac + 0.03)]
-        target = at_or_before[-1] if at_or_before else known[0]
-        resolved += 1
-        return f'href="/documents/{YEAR}/{MODEL}/{hkap}#{target[2]}"'
 
-    pattern = re.compile(r'href=\\?"/documents/\d+/[^/]+/([\w-]+)#page=(\d+)(?:&(?:amp;)?y=([\d.]+))?\\?"')
-    for report in reports:
-        if not report.get("passed"):
+def split_sections(hkap: str, entry: dict, document: dict, anchors: list[tuple]) -> tuple[list[dict], list[tuple], list]:
+    """A chapter as one document per section, the way the Porsche and Ferrari
+    manuals are organised: every numbered section that holds something of its
+    own (a procedure, an exploded view, a table) becomes a document titled with
+    its heading. A section that only lists its sub-sections is navigation, which
+    the document list now does, so it gets no document.
+
+    Returns the parts; for each heading's place on the page, where a link to it
+    should go; and the same for each heading's title."""
+    content = document["content"]
+    heads = [(i, HEADING.match(b["inputs"]["html"])) for i, b in enumerate(content) if b["type"] == "static"]
+    heads = [(i, m) for i, m in heads if m]
+    numbered = [(i, m) for i, m in heads if re.match(r"\d", re.sub(r"<[^>]+>", "", m.group(3)))]
+    minor: dict[str, str] = {}      # an unnumbered heading ("Coupé", "R8 Spyder") -> the section it sits in
+    if len(numbered) >= 2:
+        # Unnumbered headings are variants within a numbered section, not sections.
+        current = None
+        for i, m in heads:
+            if (i, m) in numbered:
+                current = m.group(2)
+            elif current:
+                minor[m.group(2)] = current
+                content[i] = {"type": "static", "inputs": {"html": f"<h4>{m.group(3)}</h4>", "para": False}}
+        heads = [(i, m) for i, m in heads if m.group(2) not in minor]
+    if len(heads) < 2:
+        part = dict(document, hkap_id=hkap, title=entry["title"], index=sort_index(entry["node_value"], None))
+        named = [(entry["title"], hkap)] + [(re.sub(r"<[^>]+>", "", m.group(3)), hkap) for _, m in heads]
+        return [part], [(page, frac, hkap) for page, frac, _ in anchors], named
+    positions = document["positions"]
+
+    def plain(markup: str) -> str:
+        return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", markup))).strip()
+
+    def navigation(block: dict) -> bool:
+        return block["type"] == "static" and plain(block["inputs"]["html"]).startswith("⇒")
+
+    parts: list[dict] = []
+    owner: dict[str, str | None] = {}         # heading anchor -> the part that starts there
+    for n, (start, match) in enumerate(heads):
+        end = heads[n + 1][0] if n + 1 < len(heads) else len(content)
+        body = content[start + 1:end]
+        anchor = match.group(2)
+        if not [b for b in body if not navigation(b)]:
+            owner[anchor] = None
             continue
-        path = os.path.join(out_dir, report["hkap_id"] + ".json")
-        document = json.load(open(path))
+        sub = f"{hkap}-{len(parts) + 1:03d}"
+        owner[anchor] = sub
+        # Sub-headings ("Removing", "Installing") become the document's contents list.
+        toc, blocks = [], []
+        for block in body:
+            heading = block["type"] == "static" and re.match(r"^<h4>(.*)</h4>$", block["inputs"]["html"], re.S)
+            if heading:
+                mark = f"part-{len(toc) + 1}"
+                toc.append({"label": plain(heading.group(1)), "anchor": mark})
+                block = {"type": "static", "inputs": {"html": f'<h4 id="{mark}">{heading.group(1)}</h4>', "para": False}}
+            blocks.append(block)
+        dumped = json.dumps(blocks)
+        keys = set(re.findall(r'"key": "(\d+)"', dumped))
+        produced: list[str] = []
+        texts(blocks, produced)
+        title = plain(match.group(3))
+        parts.append({
+            "hkap_id": sub, "title": title, "index": sort_index(entry["node_value"], len(parts) + 1),
+            "passed": True, "content": blocks, "toc": toc, "positions": positions[start + 1:end],
+            "images": {k: v for k, v in document["images"].items() if k in keys},
+            "text": title + "\n" + re.sub(r"[ \t]+", " ", "\n".join(t.strip() for t in produced if t.strip())),
+        })
+    if not parts:
+        # Nothing but pointers elsewhere: keep the chapter as the one document it is.
+        part = dict(document, hkap_id=hkap, title=entry["title"], index=sort_index(entry["node_value"], None))
+        named = [(entry["title"], hkap)] + [(plain(m.group(3)), hkap) for _, m in heads]
+        return [part], [(page, frac, hkap) for page, frac, _ in anchors], named
+    # A heading with no document of its own leads to the first one under it.
+    order = [m.group(2) for _, m in heads]
+    targets = []
+    for page, frac, anchor in anchors:
+        anchor = minor.get(anchor, anchor)
+        at = order.index(anchor) if anchor in order else 0
+        dest = next((owner[a] for a in order[at:] if owner.get(a)), None) or next(
+            (owner[a] for a in reversed(order[:at]) if owner.get(a)), None)
+        if dest:
+            targets.append((page, frac, dest))
+    # ...and by title, for references that name a section in words.
+    named = []
+    for at, (_, match) in enumerate(heads):
+        dest = next((owner[a] for a in order[at:] if owner.get(a)), None)
+        if dest:
+            named.append((plain(match.group(3)), dest))
+    return parts, targets, named
 
-        def walk(value):
-            if isinstance(value, dict):
-                if value.get("type") == "static":
-                    value["inputs"]["html"] = pattern.sub(swap, value["inputs"]["html"])
-                for item in value.values():
-                    walk(item)
-            elif isinstance(value, list):
-                for item in value:
-                    walk(item)
-        walk(document["content"])
-        with open(path, "w") as handle:
+
+def sort_index(node_value: str, part: int | None) -> str:
+    """The code shown beside a document and sorted on: the chapter's ("72.2"),
+    zero-padded so chapter 10 follows chapter 9, then the part within it."""
+    pieces = [f"{int(p):02d}" if p.isdigit() and n else p for n, p in enumerate(node_value.split("."))]
+    return ".".join(pieces) + (f".{part:02d}" if part else "")
+
+
+PAGE_LINK = re.compile(r'href="/documents/\d+/[^/]+/([\w-]+)#page=(\d+)(?:&(?:amp;)?y=([\d.]+))?"')
+# "⇒ Electrical system; Rep. gr. 27 ; Battery; Disconnecting and connecting battery ."
+# "⇒ Maintenance ; Booklet 421 ; Maintenance work; Brake pads: checking thickness ."
+TEXT_REF = re.compile(
+    r'⇒\s*(?:(?P<manual>[^;⇒<>]{3,90}?)\s*;\s*)?(?:Rep\. gr\.|Booklet)\s*(?P<group>\d+)\s*;\s*(?P<chapter>[^;⇒<>]+?)'
+    r'(?:\s*;\s*(?P<section>[^;⇒<>]+?))?(?=\s+\.(?:\s|$|<)|\s*$|\s*<|\s*⇒)')
+
+
+def norm(title: str) -> str:
+    title = html.unescape(re.sub(r"<[^>]+>", "", title))
+    title = re.sub(r"^[\d.]+\s+", "", title.strip())
+    return re.sub(r"[\s‐-]+", " ", title).strip(" .").lower()
+
+
+def resolve_links(out_dir: str, reports: list[dict]) -> dict:
+    """Make the manual's cross-references land where they point.
+
+    Printed links arrive as "<chapter>#page=N&y=F", a spot on a PDF page. Each
+    goes to the document that holds that spot; when the spot is not the start
+    of the document, the block printed there gets an anchor and the link aims
+    at it.
+
+    References written out in words ("⇒ Rep. gr. 27 ; Battery; Charging
+    battery") aren't links in the PDF at all. Those are matched to a document
+    by repair group and title and made into links; any that match nothing stay
+    as text."""
+    good = [r for r in reports if r.get("passed")]
+    targets = {r["hkap_id"]: sorted(tuple(t) for t in r["targets"]) for r in good}
+    parts = {p["hkap_id"]: json.load(open(os.path.join(out_dir, p["hkap_id"] + ".json")))
+             for r in good for p in r["parts"]}
+    stats = collections.Counter()
+    unresolved = collections.Counter()
+
+    # Titles, for the references in words.
+    by_section: dict[tuple, list[str]] = collections.defaultdict(list)
+    by_chapter: dict[tuple, list[str]] = collections.defaultdict(list)
+    chapter_of: dict[str, tuple] = {}
+    def chapter_names(title: str) -> set[str]:
+        # r8_split.py tells same-named chapters apart with the manual in brackets.
+        return {norm(title), norm(re.sub(r"\s*\([^()]*\)\s*$", "", title))}
+
+    for r in good:
+        for title, dest in r["named"]:
+            if dest not in by_section[(r["group"], norm(title))]:
+                by_section[(r["group"], norm(title))].append(dest)
+        for p in r["parts"]:
+            for name in chapter_names(r["chapter"]):
+                by_chapter[(r["group"], name)].append(p["hkap_id"])
+            chapter_of[p["hkap_id"]] = (chapter_names(r["chapter"]), norm(r["manual"]))
+
+    wanted: dict[str, set[int]] = collections.defaultdict(set)     # part -> blocks that need an anchor
+
+    def page_link(match: re.Match) -> str:
+        hkap, page, frac = match.group(1), int(match.group(2)), float(match.group(3) or 0)
+        known = targets.get(hkap)
+        if not known:
+            stats["left as page references"] += 1
+            return match.group(0)
+        # (headings can sit two lines apart, so the allowance is under a line)
+        at_or_before = [a for a in known if (a[0], a[1]) <= (page, frac + 0.006)]
+        target = at_or_before[-1] if at_or_before else known[0]
+        dest = target[2]
+        if target[0] == page and abs(target[1] - frac) < 0.006:
+            stats["to the start of a document"] += 1
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}"'
+        # Somewhere inside the document: the last block printed at or above the spot.
+        positions = parts[dest].get("positions") or []
+        block = max((i for i, at in enumerate(positions) if at and (at[0], at[1]) <= (page, frac + 0.006)), default=None)
+        if not block:
+            stats["to the start of a document"] += 1
+            return f'href="/documents/{YEAR}/{MODEL}/{dest}"'
+        wanted[dest].add(block)
+        stats["to a place inside a document"] += 1
+        return f'href="/documents/{YEAR}/{MODEL}/{dest}#ref-{block}"'
+
+    def text_ref(source: str):
+        def swap(match: re.Match) -> str:
+            group = f"{int(match.group('group')):02d}" if len(match.group('group')) < 2 else match.group('group')
+            whole, rest = match.group(0), ""
+            # The general manuals point into "the vehicle-specific Workshop Manual":
+            # the reference ends at that bracket, whatever the sentence goes on to say.
+            generic = re.search(r"\(vehicle-\s*specific Workshop Manual\)", whole)
+            chapter_text = match.group("chapter")
+            if generic:
+                whole, rest = whole[:generic.end()], whole[generic.end():]
+                chapter_text = re.sub(r"\s*\(vehicle-\s*specific Workshop Manual\).*$", "", chapter_text, flags=re.S)
+            chapter, section = norm(chapter_text), norm(match.group("section") or "")
+            if generic and match.group("section") and generic.start() < match.start("section") - match.start():
+                section = ""
+            section = norm(re.sub(r"\s*\(vehicle-\s*specific Workshop Manual\).*$", "", match.group("section") or "", flags=re.S)) if section else ""
+            manual = norm(match.group("manual") or "")
+            found = by_section.get((group, section), []) if section else []
+            if len(found) > 1:
+                narrowed = [h for h in found if chapter in chapter_of[h][0]] or found
+                narrowed = [h for h in narrowed if not manual or chapter_of[h][1].startswith(manual[:12])] or narrowed
+                found = narrowed
+            if not found:
+                found = by_chapter.get((group, chapter), [])
+                if not found:
+                    found = by_section.get((group, chapter), [])
+                if len(found) > 1 and manual:
+                    found = [h for h in found if chapter_of[h][1].startswith(manual[:12])] or found
+            if not found or found[0] == source:
+                known_group = any(key[0] == group for key in by_chapter)
+                stats["references in words left as text"
+                      + ("" if known_group else " (to a manual that isn't in this set)")] += 1
+                if known_group:
+                    unresolved[(group, chapter, section)] += 1
+                return match.group(0)
+            stats["references in words made links"] += 1
+            return f'<a class="qv qv-doc" href="/documents/{YEAR}/{MODEL}/{found[0]}">{whole}</a>{rest}'
+        return swap
+
+    def walk(value, source: str):
+        if isinstance(value, dict):
+            if value.get("type") == "static":
+                markup = PAGE_LINK.sub(page_link, value["inputs"]["html"])
+                # (only outside existing links)
+                pieces = re.split(r"(<a .*?</a>)", markup)
+                value["inputs"]["html"] = "".join(
+                    piece if piece.startswith("<a ") else TEXT_REF.sub(text_ref(source), piece) for piece in pieces)
+            for item in value.values():
+                walk(item, source)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item, source)
+
+    for name, document in parts.items():
+        walk(document["content"], name)
+    for name, document in parts.items():
+        # Anchors where links land inside the document. A step carries its own id;
+        # anything else gets an anchor placed before it (from the end, so the
+        # block numbers still hold).
+        for block in sorted(wanted.get(name, ()), reverse=True):
+            target = document["content"][block]
+            if target["type"] == "plot":
+                target["inputs"][0]["id"] = f"ref-{block}"
+            else:
+                document["content"].insert(block, {"type": "anchor", "inputs": {"id": f"ref-{block}"}})
+        document.pop("positions", None)
+        with open(os.path.join(out_dir, name + ".json"), "w") as handle:
             json.dump(document, handle, indent=1, ensure_ascii=False)
-    return resolved, kept
+    with open(os.path.join(out_dir, "unresolved-references.json"), "w") as handle:
+        json.dump([{"group": g, "chapter": c, "section": sec, "count": n} for (g, c, sec), n in unresolved.most_common()],
+                  handle, indent=1, ensure_ascii=False)
+    return dict(stats)
 
 
 def _worker(args):
@@ -935,7 +1178,7 @@ def _worker(args):
         return convert(*args)
     except Exception as error:      # reported, not hidden
         import traceback
-        return {"file": entry["pdf"], "hkap_id": entry["hkap_id"], "passed": False,
+        return {"file": entry["pdf"], "hkap_id": entry["hkap_id"], "passed": False, "parts": [], "targets": [], "named": [],
                 "error": f"{type(error).__name__}: {error}", "trace": traceback.format_exc()[-600:]}
 
 
@@ -955,7 +1198,11 @@ if __name__ == "__main__":
         reports = pool.map(_worker, [(e, split_dir, out_dir) for e in entries])
     with open(os.path.join(out_dir, "report.json"), "w") as handle:
         json.dump(reports, handle, indent=1, ensure_ascii=False)
-    resolved, kept = resolve_links(out_dir, reports)
+    link_stats = resolve_links(out_dir, reports)
+    # Which documents each chapter became, for the loader.
+    with open(os.path.join(out_dir, "index.json"), "w") as handle:
+        json.dump({r["hkap_id"]: r["parts"] for r in reports if r.get("passed")}, handle, indent=1, ensure_ascii=False)
+    documents = sum(len(r.get("parts", [])) for r in reports if r.get("passed"))
     for r in reports:
         if not r["passed"]:
             why = r.get("error") or (f"chars -{r['characters_missing']} +{r['characters_added']}  "
@@ -963,5 +1210,5 @@ if __name__ == "__main__":
                                      f"flags {list(r['flags'])[:2]}")
             print(f"pdf   {r['file'][-62:]:62} {why}")
     passed = sum(1 for r in reports if r["passed"])
-    print(f"{passed} of {len(reports)} documents structured; {len(reports) - passed} stay PDF; "
-          f"{resolved} links aimed at headings, {kept} left as page references into PDFs")
+    print(f"{passed} of {len(reports)} chapters structured, as {documents} documents; {len(reports) - passed} stay PDF")
+    print("links: " + "; ".join(f"{v} {k}" for k, v in sorted(link_stats.items())))

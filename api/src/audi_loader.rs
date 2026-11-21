@@ -89,6 +89,15 @@ struct DocM {
     pdf: String,
 }
 
+/// One of the documents a chapter was split into (tools/r8_extract.py, index.json).
+#[derive(Deserialize, Clone)]
+struct PartM {
+    hkap_id: String,
+    title: String,
+    /// Code shown beside the document and sorted on.
+    index: String,
+}
+
 impl DocM {
     // full section index shown in the workshop-literature list, e.g. "46.1"
     fn index(&self) -> &str {
@@ -158,15 +167,23 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
     // Fully prepared, ready-to-write document (built off-thread in the rayon pass).
     struct Prepared {
         media_id: String,
-        content: Vec<u8>,
+        /// The chapter's PDF, on the first of its documents only.
+        content: Option<Vec<u8>>,
         document: Document,
         node_id: i32,
+        /// The chapter this document was cut from.
+        chapter: String,
         hkap_id: String,
         text: Option<String>,
         /// Figures of a structured document, as (workshop image id, bytes).
         images: Vec<(i32, Vec<u8>)>,
     }
     let structured_dir = args.structured.as_deref().map(Path::new);
+    // Which documents each chapter became: one per section, or just itself.
+    let parts_index: std::collections::HashMap<String, Vec<PartM>> = structured_dir
+        .and_then(|dir| fs::read(dir.join("index.json")).ok())
+        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .unwrap_or_default();
 
     // Phase 1 (sequential, cheap): write the leaf tree nodes + links for every
     // document, and collect the ones that still need their content processed.
@@ -196,78 +213,108 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
 
     // Phase 2 (parallel, CPU/IO bound): read each PDF and extract its text off the
     // main thread, building the document payload. This is the expensive part.
-    let prepared: Vec<Prepared> = to_process.par_iter().map(|d| {
+    let prepared: Vec<Prepared> = to_process.par_iter().flat_map(|d| {
         let pdf_path = base.join(&d.pdf);
         let content = fs::read(&pdf_path)
             .unwrap_or_else(|e| panic!("failed reading slice {}: {}", pdf_path.display(), e));
-        let structured = structured_dir.and_then(|dir| crate::structured::read(dir, &d.hkap_id));
-        let (content_tree, toc, text, images) = match structured {
-            Some(s) => (Some(s.document.content), Some(s.document.toc), Some(s.document.text), s.images),
-            None => (None, None, crate::pdf_text::extract_pdf_text(&content).map(|t| t.trim().to_string()), Vec::new()),
+
+        // The chapter's structured documents, if every one of them loads.
+        let whole = vec![PartM { hkap_id: d.hkap_id.clone(), title: d.title.clone(), index: d.index().to_string() }];
+        let parts = parts_index.get(&d.hkap_id).cloned().unwrap_or(whole.clone());
+        let structured: Option<Vec<(PartM, crate::structured::Structured)>> = structured_dir.and_then(|dir| {
+            parts.iter()
+                .map(|part| crate::structured::read(dir, &part.hkap_id).map(|s| (part.clone(), s)))
+                .collect()
+        });
+        // (hkap id, title, index, content tree, contents list, search text, figures)
+        let documents: Vec<(PartM, Option<crate::structured::Structured>, Option<String>)> = match structured {
+            Some(list) if !list.is_empty() => list.into_iter().map(|(part, s)| (part, Some(s), None)).collect(),
+            _ => {
+                let text = crate::pdf_text::extract_pdf_text(&content).map(|t| t.trim().to_string());
+                vec![(whole[0].clone(), None, text)]
+            }
         };
-        let is_structured = content_tree.is_some();
-        let worklit = Response {
-            payload: WorkshopLiterature {
-                file_format: if is_structured { FileFormat::Xml } else { FileFormat::Pdf },
-                language_code: LanguageCode::EnUs,
-                hkap_id: d.hkap_id.clone(),
-                variant_id: 1,
-                version: None,
-                latest_version: None,
-                version_source_system: None,
-                source_system: None,
-                kdnr: d.vehicle_component.clone(),
-                ti_number: None,
-                publication_date: "2019-01-01T00:00:00.000+00:00".to_string(),
-                modification_date: 0,
-                title: d.title.clone(),
-                file_name: format!("{}.pdf", d.hkap_id),
-                document_type: DocumentType::Rm,
-                target_hkap_id: None,
-                content: content_tree,
-                toc,
-                techvalues: None,
-                mediacloud_image_ids: None,
-                tools: None,
-                media_cloud_file_id: Some(d.media_id.clone()),
-                issue_date: None,
-                vehicle_component_with_document_index: Some(d.index().to_string()),
+
+        let mut media = Some(content);
+        documents.into_iter().map(|(part, structured, pdf_text)| {
+            let (content_tree, toc, text, images) = match structured {
+                Some(s) => (Some(s.document.content), Some(s.document.toc), Some(s.document.text), s.images),
+                None => (None, None, pdf_text, Vec::new()),
+            };
+            let is_structured = content_tree.is_some();
+            let worklit = Response {
+                payload: WorkshopLiterature {
+                    file_format: if is_structured { FileFormat::Xml } else { FileFormat::Pdf },
+                    language_code: LanguageCode::EnUs,
+                    hkap_id: part.hkap_id.clone(),
+                    variant_id: 1,
+                    version: None,
+                    latest_version: None,
+                    version_source_system: None,
+                    source_system: None,
+                    kdnr: d.vehicle_component.clone(),
+                    ti_number: None,
+                    publication_date: "2019-01-01T00:00:00.000+00:00".to_string(),
+                    modification_date: 0,
+                    title: part.title.clone(),
+                    file_name: format!("{}.pdf", d.hkap_id),
+                    document_type: DocumentType::Rm,
+                    target_hkap_id: None,
+                    content: content_tree,
+                    toc,
+                    techvalues: None,
+                    mediacloud_image_ids: None,
+                    tools: None,
+                    // The chapter's PDF is the original of every document cut from it.
+                    media_cloud_file_id: Some(d.media_id.clone()),
+                    issue_date: None,
+                    vehicle_component_with_document_index: Some(part.index.clone()),
+                    links: None,
+                    quality_line_segment: None,
+                    parts: None,
+                    laborpos: None,
+                    raw_content: None,
+                },
                 links: None,
-                quality_line_segment: None,
-                parts: None,
-                laborpos: None,
-                raw_content: None,
-            },
-            links: None,
-        };
-        let document = Document {
-            hkap_id: d.hkap_id.clone(),
-            variant_id: "1".to_string(),
-            language_code: "en-us".to_string(),
-            version: 1,
-            vehicle_component: d.vehicle_component.clone(),
-            title: d.title.clone(),
-            document_type: "RM".to_string(),
-            publication_date: worklit.payload.publication_date.clone(),
-            file_format: if is_structured { "xml" } else { "pdf" }.to_string(),
-            vehicle_component_with_document_index: d.index().to_string(),
-            new: false,
-            bookmarked: false,
-            content: serde_json::to_vec(&json!(worklit)).expect("serialize workshop literature"),
-        };
-        Prepared {
-            media_id: d.media_id.clone(),
-            content,
-            document,
-            node_id: d.node_id,
-            hkap_id: d.hkap_id.clone(),
-            text,
-            images,
-        }
+            };
+            let document = Document {
+                hkap_id: part.hkap_id.clone(),
+                variant_id: "1".to_string(),
+                language_code: "en-us".to_string(),
+                version: 1,
+                vehicle_component: d.vehicle_component.clone(),
+                title: part.title.clone(),
+                document_type: "RM".to_string(),
+                publication_date: worklit.payload.publication_date.clone(),
+                file_format: if is_structured { "xml" } else { "pdf" }.to_string(),
+                vehicle_component_with_document_index: part.index.clone(),
+                new: false,
+                bookmarked: false,
+                content: serde_json::to_vec(&json!(worklit)).expect("serialize workshop literature"),
+            };
+            Prepared {
+                media_id: d.media_id.clone(),
+                // Stored once per chapter, with its first document.
+                content: media.take(),
+                document,
+                node_id: d.node_id,
+                chapter: d.hkap_id.clone(),
+                hkap_id: part.hkap_id.clone(),
+                text,
+                images,
+            }
+        }).collect::<Vec<_>>()
     }).collect();
 
     // Phase 3 (batched, concurrent DB writes): document rows + links sequentially,
     // media bytes and full-text rows via concurrent batch upserts.
+    if structured_dir.is_some() {
+        // A chapter may have been loaded before as a different set of documents.
+        let chapters: std::collections::BTreeSet<&String> = prepared.iter().map(|p| &p.chapter).collect();
+        for chapter in chapters {
+            store.remove_document_family(chapter)?;
+        }
+    }
     for p in &prepared {
         store.upsert_document_direct(&p.document)?;
         store.link_document_to_node(p.node_id, &p.hkap_id)?;
@@ -287,7 +334,9 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
                 store.upsert_workshop_image(*id, &large, bytes)?;
             }
         }
-        media.push((p.media_id, p.content));
+        if let Some(content) = p.content {
+            media.push((p.media_id, content));
+        }
         if let Some(t) = p.text {
             texts.push((p.hkap_id, t));
         }
@@ -300,7 +349,7 @@ pub fn run(settings: &Settings, args: &LoadAudiArgs) -> Result<()> {
         println!("  {} structured, {} figures", structured_count, figures.len());
     }
     println!(
-        "Done. {} documents ({} skipped), {} folder nodes, text extracted for {}/{} in {:.1}s",
+        "Done. {} chapters ({} skipped), {} folder nodes, text for {} documents (of {} chapters loaded) in {:.1}s",
         total,
         skipped,
         manifest.nodes.len() + 1,
