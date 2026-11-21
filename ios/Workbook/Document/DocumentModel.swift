@@ -29,6 +29,9 @@ final class DocumentModel {
     private(set) var anchors: [String: Int] = [:]
     /// Per top-level block: the figure to pin beside it.
     private(set) var blockFigures: [Figure?] = []
+    /// Figures that get pinned beside their own block when the document has
+    /// both halves of the screen (each block's first figure).
+    private(set) var pinnedFigureIDs: Set<String> = []
     var currentStep = 0
     /// Top-level block at the top of the reading view.
     var topBlock: Int? = 0
@@ -76,6 +79,7 @@ final class DocumentModel {
         var figures: [Figure?] = []
         var section = document.title
         var lastFigure: Figure?
+        var pinned: Set<String> = []
 
         for (block, node) in document.content.enumerated() {
             for id in Self.anchorIDs(in: node) where anchors[id] == nil { anchors[id] = block }
@@ -89,6 +93,7 @@ final class DocumentModel {
             case .plot(let items):
                 for item in items {
                     let own = item.children.flatMap(\.figures).first
+                    if let own { pinned.insert(own.id) }
                     lastFigure = own ?? lastFigure
                     steps.append(WorkStep(id: steps.count, section: section, position: item.position,
                                           nodes: item.children, figure: lastFigure, blockIndex: block))
@@ -96,6 +101,7 @@ final class DocumentModel {
             default:
                 guard !Self.isBlank(node) else { break }
                 let own = node.figures.first
+                if let own { pinned.insert(own.id) }
                 lastFigure = own ?? lastFigure
                 steps.append(WorkStep(id: steps.count, section: section, position: nil,
                                       nodes: [node], figure: lastFigure, blockIndex: block))
@@ -127,6 +133,7 @@ final class DocumentModel {
         self.steps = steps
         self.anchors = anchors
         self.blockFigures = figures
+        self.pinnedFigureIDs = pinned
         if let anchor = pendingAnchor, let block = anchors[anchor] { topBlock = block }
         pendingAnchor = nil
         currentStep = min(currentStep, max(0, steps.count - 1))

@@ -83,6 +83,7 @@ struct DocumentScreen: View {
             // the figure for what you're reading pinned on the other.
             HStack(spacing: 0) {
                 content(document, model).frame(width: split.leading)
+                    .environment(\.figuresShownAlongside, model.pinnedFigureIDs)
                 Color.clear.frame(width: max(split.gap, 1)).overlay(Theme.line)
                 pinned(document, model)
             }

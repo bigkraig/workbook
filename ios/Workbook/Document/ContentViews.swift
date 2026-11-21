@@ -12,6 +12,9 @@ struct DocumentActions {
 
 extension EnvironmentValues {
     @Entry var documentActions = DocumentActions()
+    /// Figures shown on the other half of the screen while their block is being
+    /// read; the text half leaves their picture out rather than show it twice.
+    @Entry var figuresShownAlongside: Set<String> = []
 }
 
 /// Renders a run of content nodes: consecutive text fragments flow together
@@ -222,10 +225,12 @@ private struct LinkView: View {
 private struct FigureBlock: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.documentActions) private var actions
+    @Environment(\.figuresShownAlongside) private var alongside
     let figure: Figure
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if !alongside.contains(figure.id) || figure.inTable {
             Button { actions.openFigure(figure) } label: {
                 RemoteImage(path: API(settings: settings).figurePath(figure.key))
                     .frame(maxWidth: figure.inTable ? 200 : .infinity)
@@ -240,6 +245,7 @@ private struct FigureBlock: View {
                     }
             }
             .buttonStyle(.plain)
+            }
             if !figure.title.isEmpty {
                 Text(figure.title).font(.system(size: 13 * actions.scale)).foregroundStyle(Theme.muted)
             }
